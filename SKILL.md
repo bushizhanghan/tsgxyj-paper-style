@@ -9,9 +9,11 @@ metadata:
 
 # 《图书馆学研究》论文体例与文风
 
-## 六种工作模式
+## 七种工作模式
 
 **模式 A 诊断**（不写稿，只出清单）：对照 `style-rules.md` 与 `checklists.md` 逐项检查，按「位置 → 问题 → 依据 → 建议」输出；结尾附优先级（红线问题在前）。可先跑语料目录下 `diagnose_paper.py` 自动扫描（统计对照＋反模式＋段落级改写定位）。
+
+**模式 G 对标评估**（横向定位）：把论文与语料库逐维对比，输出百分位定位——「比 X% 的刊文强/弱，强弱在哪儿」。工具：`benchmark_paper.py`（项目侧，需与语料库同目录）；指标与判定规则见 `references/benchmark-guide.md`。评估对象为形式与结构完成度，报告必须携带边界声明。建议用法：先 G 定位、再 A 细化。
 
 **模式 B 改写**（保留事实，只动形式）：**先测段再动手**——对被改段落先算句均、序数/口语词；句均 ≥50 的段落只做词层微调，<45 才做句层合并。幅度上限：字数 ±10%、句均 ≤68。**不增饰**（不添加原文没有的概括与评价）。改写前后做数字比对。操作基准与正反示范见 `references/rewrite-examples.md`。
 
@@ -54,6 +56,7 @@ metadata:
 - `references/reviewer-simulation.md` — 模拟审稿 7 维打分卡（模式 E）
 - `references/response-template.md` — 回复审稿意见与投稿材料模板（模式 F）
 - `references/citation-format.md` — 参考文献正文标注规范（多文献写法实测：范围式/列举式/禁用形态）
+- `references/benchmark-guide.md` — 对标评估框架（模式 G：百分位定位、判定规则、解读纪律）
 - `references/checklists.md` — 投稿前体例自检清单
 - `references/anti-patterns.md` — 反模式清单（AI 味 8 条 + 结构与引用失分点 + 红线）
 - `references/exemplars.md` — 样章摘录（注明篇目出处）
