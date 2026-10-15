@@ -53,6 +53,7 @@ metadata:
 - `references/rewrite-examples.md` — 改写操作纪律 + 正反示范（模式 B 必读）
 - `references/reviewer-simulation.md` — 模拟审稿 7 维打分卡（模式 E）
 - `references/response-template.md` — 回复审稿意见与投稿材料模板（模式 F）
+- `references/citation-format.md` — 参考文献正文标注规范（多文献写法实测：范围式/列举式/禁用形态）
 - `references/checklists.md` — 投稿前体例自检清单
 - `references/anti-patterns.md` — 反模式清单（AI 味 8 条 + 结构与引用失分点 + 红线）
 - `references/exemplars.md` — 样章摘录（注明篇目出处）
