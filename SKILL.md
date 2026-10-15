@@ -15,7 +15,7 @@ metadata:
 
 **模式 G 对标评估**（横向定位）：把论文与语料库逐维对比，输出百分位定位——「比 X% 的刊文强/弱，强弱在哪儿」。工具：`benchmark_paper.py`（项目侧，需与语料库同目录）；指标与判定规则见 `references/benchmark-guide.md`。评估对象为形式与结构完成度，报告必须携带边界声明。建议用法：先 G 定位、再 A 细化。
 
-**模式 B 改写**（保留事实，只动形式）：**先测段再动手**——对被改段落先算句均、序数/口语词；句均 ≥50 的段落只做词层微调，<45 才做句层合并。幅度上限：字数 ±10%、句均 ≤68。**不增饰**（不添加原文没有的概括与评价）。改写前后做数字比对。操作基准与正反示范见 `references/rewrite-examples.md`。
+**模式 B 改写**（保留事实，只动形式）：**先测段再动手**——对被改段落先算句均、序数/口语词；句均 ≥50 的段落只做词层微调，<45 才做句层合并。幅度上限：字数 ±10%、句均 ≤68。**不增饰**（不添加原文没有的概括与评价）。涉及分段问题（超长段切分／碎段合并）按 `references/paragraphing-guide.md` 执行。改写前后做数字比对。操作基准与正反示范见 `references/rewrite-examples.md`。
 
 **模式 C 新写**（先骨架后正文）：先按 `section-guides.md` 的「写作前必答问题」问齐四项（对象/发现/对策对仗/差异句），列出标题骨架与「对策—发现」对仗表——**未被确认前不动笔**；之后逐节写，每节写完自检 `anti-patterns.md`。
 
@@ -57,6 +57,7 @@ metadata:
 - `references/response-template.md` — 回复审稿意见与投稿材料模板（模式 F）
 - `references/citation-format.md` — 参考文献正文标注规范（多文献写法实测：范围式/列举式/禁用形态）
 - `references/benchmark-guide.md` — 对标评估框架（模式 G：百分位定位、判定规则、解读纪律）
+- `references/paragraphing-guide.md` — 分段操作指南（118 篇分段画像 + 切分/合并规则 + 段内结构范式）
 - `references/checklists.md` — 投稿前体例自检清单
 - `references/anti-patterns.md` — 反模式清单（AI 味 8 条 + 结构与引用失分点 + 红线）
 - `references/exemplars.md` — 样章摘录（注明篇目出处）
