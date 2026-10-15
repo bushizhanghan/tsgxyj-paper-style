@@ -17,7 +17,7 @@ metadata:
 
 **模式 C 新写**（先骨架后正文）：先按 `section-guides.md` 的「写作前必答问题」问齐四项（对象/发现/对策对仗/差异句），列出标题骨架与「对策—发现」对仗表——**未被确认前不动笔**；之后逐节写，每节写完自检 `anti-patterns.md`。
 
-**模式 D 引用核验**：先跑 `verify_refs.py`（序号连续性／正文-列表对应／语料库溯源三项自动核验），再对未命中条目逐条人工核验：真实性（可溯源）、完整性（GB/T 7714 要素）、对应性（与正文引用点匹配）。核不到的条目标记「待核」或建议删除。
+**模式 D 引用核验**：先跑 `verify_refs.py`（序号连续性／正文-列表对应／语料库溯源／标注形态四项自动核验），再对未命中条目逐条人工核验：真实性（可溯源）、完整性（GB/T 7714 要素）、对应性（与正文引用点匹配）。核不到的条目标记「待核」或建议删除。参考文献如需转为 Word 交叉引用域，见 `references/cross-ref-fields.md`（附三个现成脚本）。
 
 **模式 E 模拟审稿**（投稿前自查）：按 `references/reviewer-simulation.md` 的 7 维打分卡（35 分制）出具审稿报告＋修改路线图；报告中必须声明「刊文特征模拟、非真实审稿标准」，创新性判断标【仅参考】。
 
@@ -59,3 +59,10 @@ metadata:
 - `references/exemplars.md` — 样章摘录（注明篇目出处）
 - `references/close-reads.md` — 三篇对标论文逐段功能标注
 - `references/phrase-library.md` — 句式骨架库（占位符模板，防模板腔提示）
+- `references/cross-ref-fields.md` — 参考文献交叉引用域操作指南（含编辑铁律）
+
+## scripts/（Word 域化脚本，需 python-docx）
+
+- `scripts/build_xref.py` — 正文 [n] → REF 交叉引用域（文末加书签，可跳转）
+- `scripts/unfield_refs.py` — REF 域退回纯文本 [n]（编辑前退域）
+- `scripts/xref_verify.py` — 转换核验（文本零变化/配平/上标/书签配对）
