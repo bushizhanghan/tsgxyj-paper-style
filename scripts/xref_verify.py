@@ -15,6 +15,13 @@ import re, sys
 from docx import Document
 from docx.oxml.ns import qn
 
+# Windows 控制台默认 GBK 无法输出部分 UTF-8 字符，统一走 UTF-8
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 if len(sys.argv) < 2:
     sys.exit("用法: python xref_verify.py <转换后.docx> [转换前备份.docx]")
 NEW = sys.argv[1]
@@ -60,10 +67,19 @@ names = sorted({n for _, n in bms})
 print("书签名数量:", len(names))
 print("引用编号是否都有书签:", set(refs) <= set(int(n[4:]) for n in names))
 
-# 域结果文本与上标检查
+# 定位参考文献标题（上标检查只覆盖正文段；文末编号本就应非上标）
+REF_TITLE = None
+for i, p in enumerate(d.paragraphs):
+    if p.text.strip() in ("参考文献", "参考文献：", "参考文献:"):
+        REF_TITLE = i
+        break
+if REF_TITLE is None:
+    print("[警告] 未找到参考文献标题段，上标检查将覆盖全文（含文献表，可能误报）")
+
+# 域结果文本与上标检查（仅正文）
 ok_sup = 0
 bad = []
-for p in d.paragraphs:
+for p in d.paragraphs[:REF_TITLE if REF_TITLE is not None else len(d.paragraphs)]:
     runs = p.runs
     txt = "".join(r.text or "" for r in runs)
     for m in re.finditer(r"\[(\d{1,2})\]", txt):
@@ -83,18 +99,18 @@ for p in d.paragraphs:
             pos += len(t)
 print("正文上标 [n] 计数:", ok_sup, "| 非上标:", bad[:5] if bad else "无")
 
-# 文末编号应保持非上标
-REF_TITLE = next(i for i, p in enumerate(d.paragraphs) if p.text.strip() == "参考文献")
+# 文末编号应保持非上标（仅文献表段）
 tail_base = 0
-for p in d.paragraphs[REF_TITLE + 1:]:
-    m = re.match(r"\[(\d{1,2})\]", p.text.strip())
-    if not m:
-        continue
-    r = p.runs[0]
-    rpr = r._r.find(qn('w:rPr'))
-    va = rpr.find(qn('w:vertAlign')) if rpr is not None else None
-    if va is None or va.get(qn('w:val')) != 'superscript':
-        tail_base += 1
+if REF_TITLE is not None:
+    for p in d.paragraphs[REF_TITLE + 1:]:
+        m = re.match(r"\[(\d{1,2})\]", p.text.strip())
+        if not m:
+            continue
+        r = p.runs[0]
+        rpr = r._r.find(qn('w:rPr'))
+        va = rpr.find(qn('w:vertAlign')) if rpr is not None else None
+        if va is None or va.get(qn('w:val')) != 'superscript':
+            tail_base += 1
 print("文末编号保持非上标:", tail_base)
 
 # 书签只包住 [n]

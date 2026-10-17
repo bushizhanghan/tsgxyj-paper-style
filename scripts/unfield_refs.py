@@ -1,26 +1,45 @@
 # -*- coding: utf-8 -*-
-"""unfield_refs.py —— 把正文 REF 域还原为纯文本 [n]（保留上标），移除 _Ref 书签
+"""unfield_refs.py -- 把正文 REF 域还原为纯文本 [n]（保留上标），移除 _Ref 书签
 
 用途：编辑带引用的段落之前先"退域"为纯文本，改完后再用 build_xref.py 重建域。
 这样可避免在域结构上直接编辑导致的域损坏/嵌套。
 
 用法:
-    python unfield_refs.py <论文.docx>
+    python unfield_refs.py <论文.docx> [--backup]
+        --backup   保存前先复制一份 <文件名>.bak.docx
 
 依赖: python-docx
 纪律:
-  1. 运行前务必备份
-  2. 退域后正文变为纯文本 [n]——此时可安全增删改文字
-  3. 改完务必用 build_xref.py 重建域（只能跑一次）
+   1. 运行前务必备份（或用 --backup）
+   2. 退域后正文变为纯文本 [n]——此时可安全增删改文字
+   3. 改完务必用 build_xref.py 重建域（只能跑一次）
 """
-import copy, sys
+import copy
+import sys
+import os
+import shutil
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-if len(sys.argv) < 2:
-    sys.exit("用法: python unfield_refs.py <论文.docx>")
-PATH = sys.argv[1]
+# Windows 控制台默认 GBK 无法输出部分 UTF-8 字符，统一走 UTF-8
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+_args = [a for a in sys.argv[1:] if not a.startswith("--")]
+_flags = {a for a in sys.argv[1:] if a.startswith("--")}
+if not _args:
+    sys.exit(__doc__)
+PATH = _args[0]
+if not os.path.isfile(PATH):
+    sys.exit(f"找不到文件：{PATH}")
+if "--backup" in _flags:
+    bak = os.path.splitext(PATH)[0] + ".bak.docx"
+    shutil.copy2(PATH, bak)
+    print(f"已备份: {bak}")
 doc = Document(PATH)
 
 
