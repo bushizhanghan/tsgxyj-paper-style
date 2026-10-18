@@ -626,6 +626,37 @@ if HAVE_DOCX:
         check("language_audit 检出「差不多/搞得/咱们/靠谱」",
               all(w in out for w in ["差不多", "搞得", "咱们", "靠谱"]), out[:600])
         check("language_audit 检出「被」被动", "【E】" in out and "被广泛" in out, out[:600])
+
+        # ---- 8b. 论证链对仗核对（argument_check） ----
+        print("[8b] argument_check（论证链发现↔对策）")
+        import argument_check as ac
+        check("ac 展望句不算发现", not ac.is_find_sentence("后续研究可从以下维度拓展深化：一是引入量表") )
+        check("ac 方法依据不算发现", not ac.is_find_sentence("划分依据有二：一是障碍类型，二是文献模型"))
+        check("ac 第一算是发现", ac.is_find_sentence("一是供给结构差距：公共服务基础尚不完善"))
+        check("ac 相应不算对策", not ac.is_policy_sentence("相应地，本研究延续既有框架"))
+        check("ac 应字真对策", ac.is_policy_sentence("针对上述问题，应完善适配机制，健全支持体系"))
+        check("ac 测试列举不算对策", not ac.is_policy_sentence("（1）Hy4 Preview 模型，20 道题全部通过"))
+        check("ac 主题词重叠弱回应", ac.overlap_score(
+              ac.topic_vec("二是机制深度不足：隐性残疾识别困难，多种障碍组合适配有限"),
+              ac.topic_vec("应深化隐性残疾识别，加强组合适配")) >= 1)
+        check("ac 主题词重叠强回应", ac.overlap_score(
+              ac.topic_vec("一是验证范围有限，真实用户可用性验证尚未开展，使用端证据缺失"),
+              ac.topic_vec("本次验证并未包含真实用户的端到端可用性测试，上述结论亦不能反映真实用户场景")) >= 2)
+        r = subprocess.run([sys.executable, os.path.join(HERE, "argument_check.py"), pv],
+                           capture_output=True, encoding="utf-8", errors="replace")
+        out = r.stdout
+        check("argument_check 正常运行", "论证链对仗核对" in out, out[:200])
+        check("argument_check 有发现句计数", "发现句" in out and "对策句" in out, out[:200])
+        check("argument_check 逐条对仗表", "发现 1" in out and ("✅ 有回应" in out
+              or "🟡 弱回应" in out or "⚠️ 疑似缺回应" in out), out[:400])
+        # 合成的 rv.docx 应至少识别到发现与对策句
+        m_f = re.search(r"发现句 (\d+) 条", out)
+        check("argument_check 检出发现句≥1", m_f and int(m_f.group(1)) >= 1,
+              out[:200])
+        m_p = re.search(r"对策句 (\d+) 条", out)
+        check("argument_check 检出对策句≥1", m_p and int(m_p.group(1)) >= 1,
+              out[:200])
+
 else:
     print("  （跳过：未安装 python-docx）")
 
@@ -681,8 +712,18 @@ check("打分卡权重与 DIMS 一致",
 _sk = open(os.path.join(HERE, "..", "SKILL.md"), encoding="utf-8").read()
 _rf = open(os.path.join(HERE, "..", "README.md"), encoding="utf-8").read()
 check("SKILL.md 声明 13 维审稿", "13 维" in _sk)
-check("SKILL.md 断言数 169", "169 项断言" in _sk)
-check("README 断言数一致", "169 项断言" in _rf and "77 项断言" not in _rf)
+# 断言数：文档声明值须一致（SKILL == README）且不低于守卫下限；
+# 不绑定具体数字，避免守卫自身随断言数增长而过时
+_sk_cnt = re.search(r"(\d+)\s*项断言", _sk)
+_rf_cnt = re.search(r"(\d+)\s*项断言", _rf)
+check("SKILL.md 声明断言数", _sk_cnt is not None and int(_sk_cnt.group(1)) >= 150,
+      "SKILL.md 无断言数声明" if not _sk_cnt else _sk_cnt.group(1))
+check("READM 声明断言数一致且下限达标",
+      _rf_cnt is not None and _sk_cnt is not None
+      and int(_rf_cnt.group(1)) == int(_sk_cnt.group(1))
+      and int(_rf_cnt.group(1)) >= 150,
+      (f"SKILL={_sk_cnt.group(1) if _sk_cnt else '无'} "
+       f"README={_rf_cnt.group(1) if _rf_cnt else '无'}"))
 check("SKILL.md 无 12 维残留", "12 维" not in _sk.replace("13 维", ""))
 
 # ============ 汇总 ============

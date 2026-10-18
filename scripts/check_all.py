@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
-"""check_all.py —— 投稿前一键总检（模式 A + D + 润色 + E + G）
+"""check_all.py —— 投稿前一键总检（模式 A + D + 润色 + E + G + 论证链）
 
-按投稿前自查的实用顺序，串起六个工具，各自独立跑、互不影响：
+按投稿前自查的实用顺序，串起八个工具，各自独立跑、互不影响：
     ① GB/T 7714 文献要素核验（ref_format.py）
     ② 引用标注与对应核验（verify_refs.py，模式 D）
-    ③ 论文诊断（diagnose_paper.py，模式 A）
-    ④ 整稿语言体检（language_audit.py，润色词典落地）
-    ⑤ 模拟审稿 13 维打分（mock_review.py，模式 E）
-    ⑥ 对标评估（benchmark_paper.py，模式 G）
+    ③ 引文结构（时效/类型/来源）（citation_analysis.py）
+    ④ 论文诊断（diagnose_paper.py，模式 A）
+    ⑤ 整稿语言体检（language_audit.py，润色词典落地）
+    ⑥ 模拟审稿 13 维打分（mock_review.py，模式 E）
+    ⑦ 对标评估（benchmark_paper.py，模式 G）
+    ⑧ 论证链对仗核对（argument_check.py，发现↔对策逐条匹配）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -61,6 +63,7 @@ TOOLS = [
     ("⑤ 整稿语言体检（润色）", "language_audit.py", False),
     ("⑥ 模拟审稿（模式 E）", "mock_review.py", False),
     ("⑦ 对标评估（模式 G）", "benchmark_paper.py", True),
+    ("⑧ 论证链对仗（发现↔对策）", "argument_check.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -215,6 +218,11 @@ g_out = results.get("⑦ 对标评估（模式 G）", {}).get("out", "")
 m = re.search(r"文献条数\s+(\d+)条\s+刊中位\s+[\d.]+\s*\|\s*百分位\s+(\d+)%", g_out)
 if m and int(m.group(2)) <= 25:
     todos.append(f"文献量仅高于 {m.group(2)}% 刊文（见「对标」）")
+
+arg_out = results.get("⑧ 论证链对仗（发现↔对策）", {}).get("out", "")
+m = re.search(r"⚠️ 疑似未对仗的发现 (\d+)/(\d+) 条", arg_out)
+if m and int(m.group(1)):
+    todos.append(f"论证链 {m.group(1)}/{m.group(2)} 条发现疑似缺对策回应（见 ⑧，逐条核对）")
 
 print()
 if red_flags:
