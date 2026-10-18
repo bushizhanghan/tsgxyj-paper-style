@@ -62,6 +62,7 @@ if "--corpus" in sys.argv:
     _cli_corpus = sys.argv[i + 1] if i + 1 < len(sys.argv) else None
 
 import diagnose_paper as dp  # noqa: E402
+import argument_check as ac  # noqa: E402
 
 corpus_dir = corpus.find_corpus_dir(_cli_corpus)
 base = corpus.load_reference_stats(corpus_dir)
@@ -204,8 +205,31 @@ if find_n == 0 and pol_n == 0:
     sc -= 4 * K
     op.append("未检出「一是/其二」式发现列举与「应…」式对策句——审稿人难以核对「对策—发现」对仗。")
 elif abs(find_n - pol_n) >= 3:
-    sc -= 2.5 * K
-    op.append(f"发现列举 {find_n} 处 vs 对策条款 {pol_n} 处，差 ≥3——逐条画对应表核对是否一一对仗。")
+    sc -= 2.0 * K
+    op.append(f"发现列举 {find_n} 处 vs 对策条款 {pol_n} 处，差 ≥3——数量不对称。")
+
+# 论证链语义对仗深挖（调用 argument_check 逐条对仗引擎）
+try:
+    sm = ac.sec_map_of(m["body"], titles)
+    _finds = ac.extract_findings(m["body"], titles, sm)
+    _pols = ac.extract_policies(m["body"], titles, sm)
+    if _finds:
+        _rows = ac.match_findings(_finds, _pols)
+        _orphans = [r for r in _rows if r["level"] == "orphan"]
+        _weaks = [r for r in _rows if r["level"] == "weak"]
+        _strongs = [r for r in _rows if r["level"] == "strong"]
+        ev.append(f"语义对仗：强回应 {len(_strongs)}/弱回应 {len(_weaks)}/缺回应 {len(_orphans)}")
+        if _orphans:
+            # 每条缺失扣 1 分，最多扣 2 分
+            deduct = min(2.0, len(_orphans) * 1.0) * K
+            sc -= deduct
+            orph_samples = "；".join(f"发现{r['no']}「{r['find'][:20]}」" for r in _orphans[:2])
+            op.append(f"语义对仗核检发现 {len(_orphans)} 条发现疑似缺对策呼应（如 {orph_samples}）——建议在收口章显式逐条回应。")
+        else:
+            ev.append("语义对仗：无未对仗发现")
+except Exception as _e:
+    pass
+
 # 缺口句兑现（第 2–4 章是否回应引言问题）
 if has_gap and secs and len(secs["secs"]) >= 3:
     ev.append("章节数 ≥3（有承接空间）")

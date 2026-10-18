@@ -241,14 +241,14 @@ else:
 # ---------- 增量对比：与上次总检（.checkall_snapshot.json）比较 ----------
 SNAP_FILE = os.path.splitext(DOC)[0] + ".checkall_snapshot.json"
 _DELTA_KEYS = [
-    ("review_score", "模拟审稿总分", 0.1, "higher"),
-    ("ref_cnt", "文献条数", 1, "higher"),
-    ("para_med", "段长中位(字)", 1, "higher"),
-    ("sent_mean", "句均(字)", 1, "higher"),
-    ("cite_rate", "引用密度(/千字)", 0.01, "higher"),
-    ("diag_red", "诊断红线", 1, "lower"),
-    ("diag_target_paras", "改写目标段", 1, "lower"),
-    ("lang_a", "必改口语词", 1, "lower"),
+    ("review_score", "模拟审稿总分", 0.1, "higher", "分", 85.0),
+    ("ref_cnt", "文献条数", 1, "higher", "条", 40.0),
+    ("para_med", "段长中位", 1, "higher", "字", 220.0),
+    ("sent_mean", "句均长度", 1, "higher", "字", 63.0),
+    ("cite_rate", "引用密度", 0.01, "higher", "/千字", 3.23),
+    ("diag_red", "诊断红线", 1, "lower", "项", 0.0),
+    ("diag_target_paras", "改写目标段", 1, "lower", "段", 0.0),
+    ("lang_a", "必改口语词", 1, "lower", "处", 0.0),
 ]
 _last = {}
 if os.path.isfile(SNAP_FILE):
@@ -259,10 +259,10 @@ if os.path.isfile(SNAP_FILE):
         _last = {}
 if _last:
     print("\n" + "─" * 68)
-    print("与上次总检对比（仅列有变化的指标）")
+    print("与上次总检对比（指标变化与刊中位可视化对照）")
     print("─" * 68)
     _changed = 0
-    for _k, _label, _eps, _dir in _DELTA_KEYS:
+    for _k, _label, _eps, _dir, _unit, _base_med in _DELTA_KEYS:
         if _k not in SNAP or _k not in _last:
             continue
         cur, prev = SNAP[_k], _last[_k]
@@ -273,7 +273,22 @@ if _last:
         arrow = "▲" if df > 0 else "▼"
         good = (df > 0) == (_dir == "higher")
         mark = "✓" if good else "⚠"
-        print(f"  {arrow} {_label}：{prev:g} → {cur:g}（{df:+g}）{mark}")
+
+        # 基准可视化条：显示当前值相对刊中位的差距 (针对于有刊基准的指标)
+        bar_str = ""
+        if _base_med > 0 and _dir == "higher":
+            pct = min(1.0, max(0.0, cur / _base_med))
+            filled = int(round(pct * 10))
+            bar = "■" * filled + "□" * (10 - filled)
+            diff_med = round(_base_med - cur, 2)
+            diff_str = f"{diff_med:g}"
+            status_tag = "达标" if cur >= _base_med else f"距中位还差 {diff_str}{_unit}"
+            bar_str = f" | 刊中位 {_base_med:g}{_unit} [{bar}] ({status_tag})"
+        elif _dir == "lower":
+            status_tag = "清洁" if cur == 0 else f"仍存 {cur:g}{_unit}"
+            bar_str = f" | 目标 0{_unit} ({status_tag})"
+
+        print(f"  {arrow} {_label}：{prev:g}{_unit} → {cur:g}{_unit}（{df:+g}）{mark}{bar_str}")
     if not _changed:
         print("  （本轮指标与上次持平）")
     print(f"  快照：{os.path.basename(SNAP_FILE)}")

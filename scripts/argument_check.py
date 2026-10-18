@@ -138,6 +138,9 @@ def is_find_sentence(s):
     # 方法/设计依据列举（「依据有二」「划分依据是」）不是研究发现的缺陷，不算发现句
     if re.search(r"(依据|划分依据|设计依据|判定依据|标准依据)[有为是：:]{0,3}[一二三]", s):
         return False
+    # 分类/归纳总起句（如「结果显示可分为三类」「需求大致可归为四类」）是下文清单的引导语，核心论点在下文子项，不作独立发现句要求对仗
+    if re.search(r"(分|有|为|表现为|归为)[一二三四五\d]+(类|项|点|方面|处)", s) and not re.search(r"(?<!第)[一二三四五]是", s):
+        return False
     return any(re.search(p, s) for p in FIND_SIGNS)
 
 

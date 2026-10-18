@@ -597,6 +597,7 @@ if HAVE_DOCX:
         check("mock_review 分数在合理区间", m and 0 <= float(m.group(1)) <= 100,
               m.group(1) if m else "无")
         check("mock_review 权重合计100", "100 分制" in out, out[:120])
+        check("mock_review 包含论证链语义对仗证据", "语义对仗：" in out, out[:600])
 
         r = subprocess.run([sys.executable, os.path.join(HERE, "language_audit.py"), pv],
                            capture_output=True, encoding="utf-8", errors="replace")
