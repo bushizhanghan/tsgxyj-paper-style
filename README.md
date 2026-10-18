@@ -30,7 +30,7 @@
 | E 模拟审稿 | 投稿前 | 13 维 × 100 分制打分卡 + 按失分排序的修改路线图（声明：特征模拟，非真实评审） |
 | F 回复审稿 | 返修阶段 | 逐条回应制 + 投稿邮件与材料模板 |
 
-> 投稿前一条命令跑完八项（GB/T 7714 + D + 引文结构 + A + 润色体检 + E + G + 论证链对仗）：`python scripts/check_all.py 论文.docx`（自动汇总红线/待办与模拟审稿分数，并输出与上次总检的指标对比，退出码 0 = 无红线）。
+> 投稿前一条命令跑完九项（GB/T 7714 + D + 引文结构 + A + 润色体检 + E + G + 论证链对仗 + 图表三线表）：`python scripts/check_all.py 论文.docx`（自动汇总红线/待办与模拟审稿分数，并输出与上次总检的指标对比，退出码 0 = 无红线）。
 
 ## 文件结构
 
@@ -62,10 +62,12 @@ scripts/
   citation_analysis.py          # 引文结构与时效分析（对照 5115 条文献基准）
   benchmark_paper.py            # 模式 G：百分位对标评估
   argument_check.py             # 论证链对仗：发现句↔对策句逐条匹配（主题词重叠，收口章优先）
-  check_all.py                  # 投稿前一键总检（7714+D+引文结构+A+润色+E+G+论证链，八工具串联 + 增量快照对比）
+  table_fig_audit.py            # 图表体例与三线表规范深度审查（无竖线三线表 + 占位符检测）
+  draft_scaffold.py             # 句式脚手架生成器（五大核心章节地道骨架填空）
+  check_all.py                  # 投稿前一键总检（九大工具串联 + 增量快照对比与刊中位可视化）
   fetch_reviews_direct.py       # 投稿者反馈抓取与解析（维护 submission-reality.md）
   feedback_loop.py              # 审查反哺闭环（已见刊全面吸收/用户稿只取长处）
-  selftest.py                   # 工具链自检（200 项断言，含 xref 往返与 13 维守卫，改脚本后必跑）
+  selftest.py                   # 工具链自检（206 项断言，含 xref 往返与 13 维守卫，改脚本后必跑）
   build_xref.py / unfield_refs.py / xref_verify.py   # Word 交叉引用域
 ```
 
@@ -128,12 +130,19 @@ python scripts/benchmark_paper.py 论文.docx --corpus <语料库目录>
 # GB/T 7714 文献表要素核验
 python scripts/ref_format.py 论文.docx
 
-# 投稿前一键总检（串联 7714 + D + 引文结构 + A + 润色 + E + G + 论证链，
+# 句式脚手架生成器（写稿/改稿提速）
+python scripts/draft_scaffold.py --section intro --topic "数字图书馆"
+python scripts/draft_scaffold.py --all
+
+# 图表三线表规范与占位符审查
+python scripts/table_fig_audit.py 论文.docx
+
+# 投稿前一键总检（串联 7714 + D + 引文结构 + A + 润色 + E + G + 论证链 + 图表体例，
 #                   自动汇总红线/待办，并输出与上次总检的指标对比）
 python scripts/check_all.py 论文.docx            # 退出码 0 = 无红线
 python scripts/check_all.py 论文.docx --quick    # 快速模式（只跑前两项）
 
-# 工具链自检（改 scripts/ 后必跑，200 项断言）
+# 工具链自检（改 scripts/ 后必跑，206 项断言）
 python scripts/selftest.py -v
 
 # Word 交叉引用域：编辑前退域 → 改文字 → 单次重建 → 核验

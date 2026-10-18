@@ -64,6 +64,7 @@ TOOLS = [
     ("⑥ 模拟审稿（模式 E）", "mock_review.py", False),
     ("⑦ 对标评估（模式 G）", "benchmark_paper.py", True),
     ("⑧ 论证链对仗（发现↔对策）", "argument_check.py", False),
+    ("⑨ 图表体例与三线表规范", "table_fig_audit.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -223,6 +224,11 @@ arg_out = results.get("⑧ 论证链对仗（发现↔对策）", {}).get("out",
 m = re.search(r"⚠️ 疑似未对仗的发现 (\d+)/(\d+) 条", arg_out)
 if m and int(m.group(1)):
     todos.append(f"论证链 {m.group(1)}/{m.group(2)} 条发现疑似缺对策回应（见 ⑧，逐条核对）")
+
+tf_out = results.get("⑨ 图表体例与三线表规范", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项需修正的图表问题", tf_out)
+if m and int(m.group(1)):
+    todos.append(f"图表规范与占位符待办 {m.group(1)} 项（见 ⑨ 图表体例）")
 
 print()
 if red_flags:

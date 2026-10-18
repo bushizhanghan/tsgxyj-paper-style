@@ -664,6 +664,30 @@ if HAVE_DOCX:
         check("argument_check 检出对策句≥1", m_p and int(m_p.group(1)) >= 1,
               out[:200])
 
+        # ---- 8c. 图表深度审查（table_fig_audit） ----
+        print("[8c] table_fig_audit（三线表与占位符审查）")
+        import table_fig_audit as tfa
+        r_tf = subprocess.run([sys.executable, os.path.join(HERE, "table_fig_audit.py"), pv],
+                              capture_output=True, encoding="utf-8", errors="replace")
+        check("table_fig_audit 正常运行", "图表体例与三线表规范深度审查" in r_tf.stdout, r_tf.stdout[:200])
+
+        # ---- 8d. 句式脚手架生成器（draft_scaffold） ----
+        print("[8d] draft_scaffold（句式脚手架生成器）")
+        import draft_scaffold as ds
+        check("draft_scaffold 五大核心章节齐全",
+              all(k in ds.SCAFFOLDS for k in ("intro", "design", "finding", "policy", "ending")))
+        _sc_txt = ds.render_scaffold("intro", topic="测试主题")
+        check("draft_scaffold 渲染包含主题词", "测试主题" in _sc_txt)
+        check("draft_scaffold 包含目标篇幅与句均", "目标篇幅" in _sc_txt and "建议句均" in _sc_txt)
+
+        # ---- 8e. 分栏目精细化基线（corpus column baseline） ----
+        print("[8e] 分栏目精细化基线")
+        _cd_test = corpus.find_corpus_dir()
+        if _cd_test:
+            _b_reader = corpus.load_reference_stats(_cd_test, column="读者工作")
+            check("分栏目基线包含来源标注", "读者工作" in _b_reader.get("source", ""), _b_reader.get("source"))
+            check("分栏目基线包含完整指标", "paras" in _b_reader and "figs" in _b_reader)
+
 else:
     print("  （跳过：未安装 python-docx）")
 

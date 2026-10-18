@@ -22,6 +22,7 @@ benchmark_paper.py 共用。职责：
 import os
 import json
 import sys
+import re
 
 # Windows 控制台默认 GBK 无法输出部分 UTF-8 字符，统一走 UTF-8
 if hasattr(sys.stdout, "reconfigure"):
@@ -129,8 +130,9 @@ def load_paragraphs(corpus_dir=None):
     return data if isinstance(data, list) else []
 
 
-def load_reference_stats(corpus_dir=None):
+def load_reference_stats(corpus_dir=None, column=None):
     """从语料库统计中汇总「该刊基准」（各维度的中位/四分位/均值）。
+    支持 column 参数：指定官方九栏之一时，过滤匹配该栏目的子集样本并聚合基准。
 
     返回 dict：
         paras:  段长统计（中位 / P25 / P75）
@@ -146,9 +148,32 @@ def load_reference_stats(corpus_dir=None):
     语料库缺失时回退到 style_stats.md 记录的内置静态值（标记 "static": true）。
     """
     rows = load_corpus_stats(corpus_dir)
-    if rows:
-        return _from_rows(rows)
-    return _static_base()
+    if not rows:
+        return _static_base()
+
+    if column:
+        # 按主归属栏目（命中得分最高者）过滤
+        import diagnose_paper as _dp
+        col_rows = []
+        for r in rows:
+            txt = (r.get("file", "") + " " + " ".join(r.get("terms", []))
+                   + " " + " ".join(r.get("heads", [])))
+            matched = []
+            for col_name, pat in _dp.OFFICIAL_COLUMNS.items():
+                c = len(re.findall(pat, txt))
+                if c:
+                    matched.append((c, col_name))
+            if matched:
+                matched.sort(reverse=True)
+                if matched[0][1] == column:
+                    col_rows.append(r)
+        if len(col_rows) >= 3:  # 至少 3 篇以上才聚合独立栏目基线，否则回退全库
+            base = _from_rows(col_rows)
+            base["source"] = f"语料库「{column}」栏目（{len(col_rows)} 篇）"
+            base["column"] = column
+            return base
+
+    return _from_rows(rows)
 
 
 def _pct(arr, p):

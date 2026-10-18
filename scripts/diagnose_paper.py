@@ -483,18 +483,28 @@ def main():
         return 0
     # 解析参数
     cli_corpus = None
+    cli_column = None
     flags = set()
     rest = []
-    for a in args:
-        if a.startswith("--corpus"):
-            cli_corpus = args[args.index(a) + 1] if args.index(a) + 1 < len(args) else None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--corpus" and i + 1 < len(args):
+            cli_corpus = args[i + 1]
+            i += 2
+            continue
+        elif a == "--column" and i + 1 < len(args):
+            cli_column = args[i + 1]
+            i += 2
+            continue
         elif a.startswith("--"):
             flags.add(a)
         else:
             rest.append(a)
+        i += 1
     path = rest[0] if rest else None
     if not path:
-        print("用法: python diagnose_paper.py <论文.docx> [--corpus <dir>] [--json] [--brief] [--paragraphs]")
+        print("用法: python diagnose_paper.py <论文.docx> [--corpus <dir>] [--column <栏目>] [--json] [--brief] [--paragraphs]")
         return 2
     if not os.path.isfile(path):
         print(f"找不到文件：{path}")
@@ -506,7 +516,6 @@ def main():
     except FileNotFoundError as e:
         print(f"[警告] {e}，将使用内置静态基线。")
 
-    base = corpus.load_reference_stats(corpus_dir)
     paras, refs, abs_text, kw_text, titles, body = extract_paras(path)
     m = compute_metrics(body, refs, abs_text, kw_text, titles)
     abst = scan_abstract(abs_text)
@@ -515,6 +524,10 @@ def main():
     struct = scan_structure(m["titles"])
     secs = scan_sections(paras, m["titles"])
     official = scan_official(kw_text, refs, m["titles"], "".join(clean(p) for p in body), paras=paras)
+
+    # 优先使用显式指定栏目，否则采用自动对位的首选栏目进行分栏目基准对比
+    target_column = cli_column or (official["columns"][0] if official["columns"] else None)
+    base = corpus.load_reference_stats(corpus_dir, column=target_column)
 
     lines = []
     lines.append("=" * 62)
