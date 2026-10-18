@@ -9,11 +9,14 @@
     ⑤ 模拟审稿 13 维打分（mock_review.py，模式 E）
     ⑥ 对标评估（benchmark_paper.py，模式 G）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
+每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
+「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
 
 用法:
     python check_all.py <论文.docx> [--corpus <语料库目录>] [--no-benchmark]
     python check_all.py <论文.docx> --quick     # 只跑①②，快
     python check_all.py <论文.docx> --no-review # 跳过⑤模拟审稿
+    python check_all.py <论文.docx> --json      # 追加结构化 JSON（含快照与上次对比）
 
 退出码：0 = 无红线；1 = 有红线（需处理后再投）
 说明：各工具的完整报告在各自小节输出；本脚本只做串联与小结，不替代细读。
@@ -87,6 +90,9 @@ for title, script, skip in TOOLS:
         print("[stderr]", r.stderr.strip()[-300:])
     results[title] = {"rc": r.returncode, "out": r.stdout or "", "err": r.stderr or ""}
 
+# ---------- 指标快照：本轮可量化指标（作增量对比基准） ----------
+SNAP = {}
+
 # ---------- 总检小结 ----------
 print("\n" + "═" * 68)
 print("总检小结")
@@ -135,6 +141,7 @@ diag_out = results.get("④ 论文诊断（模式 A）", {}).get("out", "") if n
 m = re.search(r"\[红线合计\] (\d+) 项", diag_out)
 if m:
     n_red = int(m.group(1))
+    SNAP["diag_red"] = n_red
     if n_red:
         for m_ in re.finditer(r"  (\S+?): \d+ 处 = [\d.]+/万字（刊基线 [\d.]+）⚠️", diag_out):
             red_flags.append(f"反模式「{m_.group(1)}」超标（见「诊断」）")
@@ -146,19 +153,31 @@ if m:
         print("· 诊断红线（反模式/结构/摘要）：✓ 0 项")
 m = re.search(r"段落级扫描】共 (\d+) 个目标段", diag_out)
 if m and int(m.group(1)):
+    SNAP["diag_target_paras"] = int(m.group(1))
     todos.append(f"段落级改写目标 {m.group(1)} 段（见「诊断」）")
 m = re.search(r"文献 (\d+)条 vs 刊中位 (\d+) ▼", diag_out)
 if m:
+    SNAP["ref_cnt"] = int(m.group(1))
     todos.append(f"参考文献 {m.group(1)} 条低于刊中位 {m.group(2)}（见「诊断」对照）")
 m = re.search(r"段长中位 (\d+)字 vs 刊中位 (\d+) ▲ 低于", diag_out)
 if m:
+    SNAP["para_med"] = int(m.group(1))
     todos.append(f"段长中位 {m.group(1)} 字偏短（刊中位 {m.group(2)}，见「诊断」）")
+# 句均与引用密度（诊断报告中的正文指标行）
+m2 = re.search(r"句均 (\d+)(?:\.\d+)?字 vs 刊中位", diag_out)
+if m2:
+    SNAP["sent_mean"] = float(m2.group(1))
+m3 = re.search(r"引用密度 ([\d.]+)/千字 vs 刊中位", diag_out)
+if m3:
+    SNAP["cite_rate"] = float(m3.group(1))
 
 bm_out = results.get("⑤ 整稿语言体检（润色）", {}).get("out", "") if not QUICK else ""
 m = re.search(r"【A】该刊 0 次口语词（必改）：(\d+) 处", bm_out)
 if m:
+    SNAP["lang_a"] = int(m.group(1))
     red_flags.append(f"含该刊 0 次口语词 {m.group(1)} 处（见「语言体检」，必改）")
 elif "【A】该刊 0 次口语词（必改）：✓ 无" in bm_out:
+    SNAP["lang_a"] = 0
     print("· 整稿语言体检 A 类口语词：✓ 无")
 LANG_CATS = [
     ("B", "该刊罕用词", "该刊罕用词"),
@@ -177,6 +196,7 @@ mr_out = results.get("⑥ 模拟审稿（模式 E）", {}).get("out", "") if not
 m = re.search(r"【总分】([\d.]+) / (\d+)", mr_out)
 if m:
     score = float(m.group(1))
+    SNAP["review_score"] = score
     print(f"· 模拟审稿总分：{score:.1f}/100")
     if score < 60:
         red_flags.append(f"模拟审稿 {score:.1f}/100 <60——结构性问题，需大修（见「模拟审稿」）")
@@ -210,10 +230,58 @@ if todos:
 else:
     print("🟡 待办：0 项")
 
+# ---------- 增量对比：与上次总检（.checkall_snapshot.json）比较 ----------
+SNAP_FILE = os.path.splitext(DOC)[0] + ".checkall_snapshot.json"
+_DELTA_KEYS = [
+    ("review_score", "模拟审稿总分", 0.1, "higher"),
+    ("ref_cnt", "文献条数", 1, "higher"),
+    ("para_med", "段长中位(字)", 1, "higher"),
+    ("sent_mean", "句均(字)", 1, "higher"),
+    ("cite_rate", "引用密度(/千字)", 0.01, "higher"),
+    ("diag_red", "诊断红线", 1, "lower"),
+    ("diag_target_paras", "改写目标段", 1, "lower"),
+    ("lang_a", "必改口语词", 1, "lower"),
+]
+_last = {}
+if os.path.isfile(SNAP_FILE):
+    try:
+        with open(SNAP_FILE, encoding="utf-8") as f:
+            _last = json.load(f)
+    except (ValueError, OSError):
+        _last = {}
+if _last:
+    print("\n" + "─" * 68)
+    print("与上次总检对比（仅列有变化的指标）")
+    print("─" * 68)
+    _changed = 0
+    for _k, _label, _eps, _dir in _DELTA_KEYS:
+        if _k not in SNAP or _k not in _last:
+            continue
+        cur, prev = SNAP[_k], _last[_k]
+        if abs(cur - prev) < _eps:
+            continue
+        _changed += 1
+        df = cur - prev
+        arrow = "▲" if df > 0 else "▼"
+        good = (df > 0) == (_dir == "higher")
+        mark = "✓" if good else "⚠"
+        print(f"  {arrow} {_label}：{prev:g} → {cur:g}（{df:+g}）{mark}")
+    if not _changed:
+        print("  （本轮指标与上次持平）")
+    print(f"  快照：{os.path.basename(SNAP_FILE)}")
+# 写回本轮快照（无论是否 --json 都记录，供下次对比）
+try:
+    with open(SNAP_FILE, "w", encoding="utf-8") as f:
+        json.dump(SNAP, f, ensure_ascii=False, indent=1)
+except OSError:
+    pass
+
 if "--json" in _flags:
     out = {
         "doc": os.path.basename(DOC),
         "red_flags": red_flags, "todos": todos,
+        "snapshot": SNAP,
+        "prev_snapshot": _last,
         "rc": {k: v["rc"] for k, v in results.items()},
     }
     jf = os.path.splitext(DOC)[0] + ".checkall.json"

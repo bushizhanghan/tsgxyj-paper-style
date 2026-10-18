@@ -629,6 +629,62 @@ if HAVE_DOCX:
 else:
     print("  （跳过：未安装 python-docx）")
 
+# ============ 9. 模拟审稿维度守卫（防 12↔13 漂移） ============
+print("[9] 模拟审稿维度守卫（mock_review DIMS ↔ add 满分 ↔ 打分卡文档）")
+_mr = open(os.path.join(HERE, "mock_review.py"), encoding="utf-8").read()
+_rs = open(os.path.join(HERE, "..", "references", "reviewer-simulation.md"),
+           encoding="utf-8").read()
+# 黄金期望：该刊审稿关注度定权的 13 维（合计 100）
+_GOLD = {"选题与定位": 12, "结构与篇幅": 10, "方法与数据": 9, "论证链": 9,
+         "文献质量": 10, "引文规范": 8, "体例规范": 8, "语言与文风": 8,
+         "润色与语感": 7, "净度（AI味）": 6, "官方合规": 7, "图表质量": 3,
+         "结构创新度": 3}
+_dims = re.search(r"DIMS\s*=\s*\[(.*?)\]", _mr, re.S)
+check("mock_review 存在 DIMS 常量", _dims is not None)
+_dims_name_w = {}
+if _dims:
+    for _n, _w in re.findall(r'\("([^"]+)",\s*(\d+)\)', _dims.group(1)):
+        _dims_name_w[_n] = int(_w)
+    check("DIMS 恰为 13 维", len(_dims_name_w) == 13, str(len(_dims_name_w)))
+    check("DIMS 权重合计 100", sum(_dims_name_w.values()) == 100,
+          str(sum(_dims_name_w.values())))
+    _missing = set(_GOLD) - set(_dims_name_w)
+    _extra = set(_dims_name_w) - set(_GOLD)
+    check("DIMS 维度名与黄金期望一致", not _missing and not _extra,
+          f"缺 {_missing} 多 {_extra}")
+    _wbad = {k: _dims_name_w[k] for k in _GOLD if _GOLD.get(k) != _dims_name_w.get(k)}
+    check("DIMS 各维权重与黄金期望一致", not _wbad, str(_wbad))
+# add() 满分与 DIMS 对照（防块内满分漂移）
+_adds = dict((n, int(w)) for n, w in
+             re.findall(r'add\("([^"]+)",\s*(\d+)', _mr))
+if _dims:
+    check("add() 满分与 DIMS 一致",
+          all(_adds.get(k) == _dims_name_w.get(k) for k in _dims_name_w),
+          str({k: (_adds.get(k), _dims_name_w.get(k)) for k in _dims_name_w
+               if _adds.get(k) != _dims_name_w.get(k)})[:300])
+# 输出自称「十三维得分」（防输出头漂移）
+check("mock_review 输出头为十三维", "【十三维得分】" in _mr)
+# 打分卡文档：表格行数与权重列与 DIMS 一致
+_tbl = re.findall(r'^\|\s*(\d+)\s*\|\s*\*\*([^*]+)\*\*\s*\|\s*(\d+)\s*\|',
+                  _rs, re.M)
+_tbl_gold = {}
+for _rn, _rnname, _rwn in _tbl:
+    _tbl_gold[_rnname.strip()] = int(_rwn)
+check("打分卡表格恰 13 行", len(_tbl_gold) == 13, str(len(_tbl_gold)))
+check("打分卡维度名与 DIMS 一致", set(_tbl_gold) == set(_GOLD),
+      str(set(_tbl_gold) ^ set(_GOLD)))
+check("打分卡权重与 DIMS 一致",
+      all(_tbl_gold.get(k) == _GOLD[k] for k in _GOLD),
+      str({k: (_tbl_gold.get(k), _GOLD[k]) for k in _GOLD
+           if _tbl_gold.get(k) != _GOLD[k]})[:300])
+# SKILL.md / README 的断言数与维数描述守卫
+_sk = open(os.path.join(HERE, "..", "SKILL.md"), encoding="utf-8").read()
+_rf = open(os.path.join(HERE, "..", "README.md"), encoding="utf-8").read()
+check("SKILL.md 声明 13 维审稿", "13 维" in _sk)
+check("SKILL.md 断言数 169", "169 项断言" in _sk)
+check("README 断言数一致", "169 项断言" in _rf and "77 项断言" not in _rf)
+check("SKILL.md 无 12 维残留", "12 维" not in _sk.replace("13 维", ""))
+
 # ============ 汇总 ============
 print()
 print("=" * 46)
