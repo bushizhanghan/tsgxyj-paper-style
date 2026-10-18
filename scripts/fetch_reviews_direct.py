@@ -6,7 +6,7 @@ references/submission-reality.md 更新使用。
 
 用法:
     python fetch_reviews_direct.py                 # 抓 1–6 页（默认）
-    python fetch_reviews_direct.py --pages 1 20    # 抓 1–20 页
+    python fetch_reviews_direct.py --pages 1 12    # 抓全部有效页（该源共 12 页）
     python fetch_reviews_direct.py --analyze-only  # 只分析已抓的缓存
 
 设计说明：
