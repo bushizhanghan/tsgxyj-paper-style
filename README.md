@@ -65,7 +65,7 @@ scripts/
   check_all.py                  # 投稿前一键总检（7714+D+引文结构+A+润色+E+G+论证链，八工具串联 + 增量快照对比）
   fetch_reviews_direct.py       # 投稿者反馈抓取与解析（维护 submission-reality.md）
   feedback_loop.py              # 审查反哺闭环（已见刊全面吸收/用户稿只取长处）
-  selftest.py                   # 工具链自检（197 项断言，含 xref 往返与 13 维守卫，改脚本后必跑）
+  selftest.py                   # 工具链自检（200 项断言，含 xref 往返与 13 维守卫，改脚本后必跑）
   build_xref.py / unfield_refs.py / xref_verify.py   # Word 交叉引用域
 ```
 
@@ -133,7 +133,7 @@ python scripts/ref_format.py 论文.docx
 python scripts/check_all.py 论文.docx            # 退出码 0 = 无红线
 python scripts/check_all.py 论文.docx --quick    # 快速模式（只跑前两项）
 
-# 工具链自检（改 scripts/ 后必跑，197 项断言）
+# 工具链自检（改 scripts/ 后必跑，200 项断言）
 python scripts/selftest.py -v
 
 # Word 交叉引用域：编辑前退域 → 改文字 → 单次重建 → 核验

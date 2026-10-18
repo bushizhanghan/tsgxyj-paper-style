@@ -150,9 +150,14 @@ OFFICIAL_COLUMNS = {
 }
 
 
-def scan_official(kw_text, refs, titles, alltext):
-    """官方须知合规检查。返回 {issues: [...], columns: [...]}。"""
+def scan_official(kw_text, refs, titles, alltext, paras=None):
+    """官方须知合规检查。返回 {issues: [...], columns: [...], package_notices: [...] 等}。
+    paras: [(style, text)] 全量段落，供检查英文题名/摘要/关键词与文末作者元数据。"""
     issues = []
+    package_notices = []  # 投稿必备包要素提醒（作者简介/定稿日期/通信方式等）
+
+    full_paras_text = "\n".join(t for _, t in paras) if paras else alltext
+
     # ① 关键词泛词
     kws = [k.strip() for k in re.split(r"[\s;；,，、]+",
                                        re.sub(r"^【?关\s*键\s*词】?[：:]?", "", kw_text or ""))
@@ -210,7 +215,34 @@ def scan_official(kw_text, refs, titles, alltext):
     has_jielun = any(re.search(r"结\s*论|结束语|余论", t) for t in titles)
     if has_jielun and not has_jieyu:
         issues.append("末章名为「结论/结束语」——官方格式序列写「结语」，建议对齐")
-    return {"issues": issues, "columns": cols, "kws": kws, "en_title_issues": len(bad_en)}
+
+    # ⑥ 官方排版序列与对称性检查（Abstract: 与 Key words:）
+    has_en_abs = bool(re.search(r"(?:Abstract|ABSTRACT)\s*[:：\s]", full_paras_text))
+    has_en_kws = bool(re.search(r"Key\s*words?\s*[:：\s]", full_paras_text, re.I))
+    if not has_en_abs:
+        issues.append("缺少英文摘要（官方明文格式：Abstract:，须中英文对称）")
+    if not has_en_kws:
+        issues.append("缺少英文关键词（官方明文格式：Key words:，须中英文对应）")
+
+    # ⑦ 投稿必备包完整性（文末作者简介、联系方式、定稿日期）
+    has_bio = bool(re.search(r"作者简介|第一作者|通讯作者|【作者简介】", full_paras_text))
+    has_contact = bool(re.search(r"电话|邮箱|E-?mail|通信地址|通讯地址|邮编|邮政编码", full_paras_text, re.I))
+    has_date = bool(re.search(r"定稿日期|收稿日期", full_paras_text))
+
+    if not has_bio:
+        package_notices.append("文末未见「作者简介」（姓名、单位、职称、学位、研究方向；官方要求初审完备）")
+    if not has_contact:
+        package_notices.append("文末未见「联系方式」（详细通信地址、邮编、电话、电子邮箱；官方投稿必备）")
+    if not has_date:
+        package_notices.append("文末未见「定稿日期」（官方格式序列要求末尾附定稿日期）")
+
+    return {
+        "issues": issues, "columns": cols, "kws": kws,
+        "en_title_issues": len(bad_en),
+        "package_notices": package_notices,
+        "has_en_abs": has_en_abs,
+        "has_en_kws": has_en_kws,
+    }
 
 
 def scan_sections(paras, titles):
@@ -482,7 +514,7 @@ def main():
     para_issues = scan_paragraphs(m["body"])
     struct = scan_structure(m["titles"])
     secs = scan_sections(paras, m["titles"])
-    official = scan_official(kw_text, refs, m["titles"], "".join(clean(p) for p in body))
+    official = scan_official(kw_text, refs, m["titles"], "".join(clean(p) for p in body), paras=paras)
 
     lines = []
     lines.append("=" * 62)
@@ -521,6 +553,10 @@ def main():
             lines.append(f"  ⚠️ {it}")
     else:
         lines.append("  ✓ 官方明文项：未发现问题")
+    if official.get("package_notices"):
+        lines.append("  [投稿包要素提醒（实名投稿必备，盲审阶段可略）]：")
+        for pn in official["package_notices"]:
+            lines.append(f"    · ℹ️ {pn}")
     lines.append("  （官方要点：摘要约 200 字、忌 本文/我们/分析了/总结了/提出了/解决了、"
                  "投稿邮箱 tsgxyj@vip.163.com、审稿时限 7 周、2022 年起月刊）")
     if abst.get("present"):

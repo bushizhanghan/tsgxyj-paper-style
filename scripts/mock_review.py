@@ -445,19 +445,24 @@ add("润色与语感", 7, sc, ev, op)
 # ==================== 9b. 官方合规（7） ====================
 ev, op = [], []
 sc = 7.0
-_official = dp.scan_official(kw_text, refs, m["titles"], alltext)
+_official = dp.scan_official(kw_text, refs, m["titles"], alltext, paras=paras)
 if _official["columns"]:
     ev.append("栏目对位：" + _official["columns"][0])
 else:
     sc -= 2 * K
     op.append("未能判定所属栏目（官方九栏）——投稿时须注明栏目，无法对位易被判「与刊物定位不符」。")
 if _official["issues"]:
-    sc -= min(5, len(_official["issues"]) * 1.6) * K
+    sc -= min(5, len(_official["issues"]) * 1.5) * K
     for it in _official["issues"]:
         op.append("[官方] " + it)
     ev.append(f"官方明文问题 {len(_official['issues'])} 项")
 else:
     ev.append("官方明文项：无问题")
+# 投稿必备包完整性（文末作者简介/联系方式/定稿日期，不扣分但给提示）
+if _official.get("package_notices"):
+    for pn in _official["package_notices"]:
+        op.append(f"[投稿包提示] {pn}")
+    ev.append(f"投稿包待补项 {len(_official['package_notices'])} 项")
 # 摘要字数按官方 200 字左右（而非实测 262）
 if abst.get("present"):
     _n = abst["chars"]

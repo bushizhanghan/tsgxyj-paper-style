@@ -360,6 +360,12 @@ _off = dp.scan_official("关键词：研究；发展；视障服务", [], ["0 �
 check("关键词泛词检出", any("泛词" in i for i in _off["issues"]), _off["issues"])
 check("栏目对位非空", bool(_off["columns"]), _off["columns"])
 check("读者工作优先匹配", _off["columns"][0] == "读者工作", _off["columns"][:3])
+# 官方排版序列与投稿包检测
+_off_pkg = dp.scan_official("关键词：信息可及性", [], ["0 引言", "5 结语"], "正文",
+                            paras=[("", "Abstract: test"), ("", "Key words: test"), ("", "作者简介：某某")])
+check("官方Abstract检出", _off_pkg["has_en_abs"] is True)
+check("官方Key words检出", _off_pkg["has_en_kws"] is True)
+check("官方投稿包提示存在", len(_off_pkg["package_notices"]) >= 1, _off_pkg["package_notices"])
 # 官方九栏齐全
 check("官方九栏定义", len(dp.OFFICIAL_COLUMNS) == 9, len(dp.OFFICIAL_COLUMNS))
 # 英文题名大写（ref_format）
