@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""check_all.py —— 投稿前一键总检（模式 A + D + 润色 + E + G + 论证链）
+"""check_all.py —— 投稿前一键总检（模式 A + D + 润色 + E + G + 论证链 + 数字一致性 + 术语漂移）
 
-按投稿前自查的实用顺序，串起八个工具，各自独立跑、互不影响：
+按投稿前自查的实用顺序，串起十一个工具，各自独立跑、互不影响：
     ① GB/T 7714 文献要素核验（ref_format.py）
     ② 引用标注与对应核验（verify_refs.py，模式 D）
     ③ 引文结构（时效/类型/来源）（citation_analysis.py）
@@ -10,6 +10,9 @@
     ⑥ 模拟审稿 13 维打分（mock_review.py，模式 E）
     ⑦ 对标评估（benchmark_paper.py，模式 G）
     ⑧ 论证链对仗核对（argument_check.py，发现↔对策逐条匹配）
+    ⑨ 图表体例与三线表规范（table_fig_audit.py）
+    ⑩ 摘要—正文数字一致性（number_consistency.py，红线级）
+    ⑪ 术语漂移检测（term_consistency.py，同义异形词混用，待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -65,6 +68,8 @@ TOOLS = [
     ("⑦ 对标评估（模式 G）", "benchmark_paper.py", True),
     ("⑧ 论证链对仗（发现↔对策）", "argument_check.py", False),
     ("⑨ 图表体例与三线表规范", "table_fig_audit.py", False),
+    ("⑩ 摘要—正文数字一致性", "number_consistency.py", False),
+    ("⑪ 术语漂移检测（同义异形词混用）", "term_consistency.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -229,6 +234,27 @@ tf_out = results.get("⑨ 图表体例与三线表规范", {}).get("out", "")
 m = re.search(r"🔴 发现 (\d+) 项需修正的图表问题", tf_out)
 if m and int(m.group(1)):
     todos.append(f"图表规范与占位符待办 {m.group(1)} 项（见 ⑨ 图表体例）")
+
+nc_out = results.get("⑩ 摘要—正文数字一致性", {}).get("out", "")
+m = re.search(r"🔴 摘要与正文数字硬伤 (\d+) 项", nc_out)
+if m and int(m.group(1)):
+    red_flags.append(f"摘要与正文数字不一致 {m.group(1)} 处（见 ⑩ 数字一致性，投稿前必须改）")
+elif m:
+    print("· 摘要—正文数字一致性：✓ 无硬伤")
+m = re.search(r"🟡 数字待人工核对 (\d+) 项", nc_out)
+if m and int(m.group(1)):
+    todos.append(f"数字待人工核对 {m.group(1)} 项（模糊量/多候选，见 ⑩ 数字一致性）")
+
+# ⑪ 术语漂移：待办级（不阻断投稿，建议统一；与 ⑩ 红线级区分开）
+tc_out = results.get("⑪ 术语漂移检测（同义异形词混用）", {}).get("out", "")
+m = re.search(r"🔴 术语混用 (\d+) 组", tc_out)
+if m and int(m.group(1)):
+    todos.append(f"术语漂移 {m.group(1)} 组（同义异形词混用，见 ⑪，建议全文统一）")
+elif m:
+    print("· 术语漂移（同义异形词混用）：✓ 未检出")
+elif results.get("⑪ 术语漂移检测（同义异形词混用）", {}).get("rc") == 1:
+    # 退出码 1 但组数解析失败 → 兜底记一条待核，防止静默漏报
+    todos.append("术语混用待核（见 ⑪，组数解析失败）")
 
 print()
 if red_flags:
