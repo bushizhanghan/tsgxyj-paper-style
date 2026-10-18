@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""mock_review.py -- 模式 E 模拟审稿：12 维 × 100 分制自动打分 + 审稿意见
+"""mock_review.py -- 模式 E 模拟审稿：13 维 × 100 分制自动打分 + 审稿意见
 
 性质声明（与 references/reviewer-simulation.md 一致）：
     这是基于本刊 118 篇刊文特征构造的「模拟审稿人」，不是该刊真实审稿标准。
@@ -351,7 +351,7 @@ add("体例规范", 8, sc, ev, op)
 
 # ==================== 8. 语言与文风（10） ====================
 ev, op = [], []
-sc = 10.0
+sc = 8.0
 sents = sents_of(alltext)
 smean = st.mean([len(s) for s in sents]) if sents else 0
 _mp, _ms, _mc = base["paras"]["med"], base["sents"]["med"], base["cites"]["med"]
@@ -379,11 +379,11 @@ if m["cite_rate"] < base["cites"]["q25"]:
 elif m["cite_rate"] < _mc * 0.8:
     sc -= 1 * K
     op.append(f"引用密度 {m['cite_rate']:.2f}/千字，略低于刊中位（{_mc:.2f}）。")
-add("语言与文风", 10, sc, ev, op)
+add("语言与文风", 8, sc, ev, op)
 
 # ==================== 9. 润色与语感（8） ====================
 ev, op = [], []
-sc = 8.0
+sc = 7.0
 le_per_1k = alltext.count("了") / max(len(alltext), 1) * 1000
 bei_per_1k = count_pat(r"被") / max(len(alltext), 1) * 1000
 ev += [f"「了」{le_per_1k:.1f}/千字（刊 2.7）", f"「被」{bei_per_1k:.2f}/千字（刊 0.53）"]
@@ -415,11 +415,36 @@ strong_hit = count_pat(r"(?<!显著)(?<!明显)(彻底|完全|绝对|必然|极�
 if strong_hit:
     sc -= min(2, strong_hit * 0.6) * K
     op.append(f"无数据支撑的强断言 {strong_hit} 处（彻底/完全/绝对/必然/极大）——改「有所/一定程度上/相对」。")
-add("润色与语感", 8, sc, ev, op)
+add("润色与语感", 7, sc, ev, op)
+
+# ==================== 9b. 官方合规（7） ====================
+ev, op = [], []
+sc = 7.0
+_official = dp.scan_official(kw_text, refs, m["titles"], alltext)
+if _official["columns"]:
+    ev.append("栏目对位：" + _official["columns"][0])
+else:
+    sc -= 2 * K
+    op.append("未能判定所属栏目（官方九栏）——投稿时须注明栏目，无法对位易被判「与刊物定位不符」。")
+if _official["issues"]:
+    sc -= min(5, len(_official["issues"]) * 1.6) * K
+    for it in _official["issues"]:
+        op.append("[官方] " + it)
+    ev.append(f"官方明文问题 {len(_official['issues'])} 项")
+else:
+    ev.append("官方明文项：无问题")
+# 摘要字数按官方 200 字左右（而非实测 262）
+if abst.get("present"):
+    _n = abst["chars"]
+    if _n > 300:
+        sc -= 1.0 * K
+        op.append(f"摘要 {_n} 字，超官方「200 字左右」较多（实测中位 262，但官方目标更短）。")
+    ev.append(f"摘要 {_n} 字（官方 200 左右）")
+add("官方合规", 7, sc, ev, op)
 
 # ==================== 10. 净度（AI 味）（8） ====================
 ev, op = [], []
-sc = 8.0
+sc = 6.0
 flagged = [a for a in anti if a["flag"]]
 if flagged:
     sc -= min(5, len(flagged) * 2.0) * K
@@ -439,11 +464,11 @@ if wan:
     sc -= min(2.5, wan * 1.2) * K
     op.append(f"万能收尾句 {wan} 处（该刊 121 万字仅 8 次「具有重要意义」）。")
 ev.append(f"红线句 {red_hits} / 万能句 {wan} / 反模式 {len(flagged)}")
-add("净度（AI味）", 8, sc, ev, op)
+add("净度（AI味）", 6, sc, ev, op)
 
 # ==================== 11. 图表质量（5） ====================
 ev, op = [], []
-sc = 5.0
+sc = 3.0
 fig_n, tab_n = m["fig_n"], m["tab_n"]
 ev += [f"图 {fig_n} 张（刊中位 {base['figs']['med']}）", f"表 {tab_n} 张（刊中位 {base['tabs']['med']}）"]
 if fig_n + tab_n == 0:
@@ -459,7 +484,7 @@ ev.append(f"图表指路句 {fig_ref}")
 if fig_n + tab_n > 0 and fig_ref < (fig_n + tab_n) * 0.6:
     sc -= 1.2 * K
     op.append("图表在正文中的指路句偏少——该刊惯例是「如图 1 所示」「见表 2」显式引出。")
-add("图表质量", 5, sc, ev, op)
+add("图表质量", 3, sc, ev, op)
 
 # ==================== 12. 结构创新度（3，仅参考） ====================
 ev, op = [], []
@@ -481,8 +506,8 @@ add("结构创新度", 3, sc, ev, op)
 # ==================== 输出 ====================
 DIMS = [
     ("选题与定位", 12), ("结构与篇幅", 10), ("方法与数据", 9), ("论证链", 9),
-    ("文献质量", 10), ("引文规范", 8), ("体例规范", 8), ("语言与文风", 10),
-    ("润色与语感", 8), ("净度（AI味）", 8), ("图表质量", 5), ("结构创新度", 3),
+    ("文献质量", 10), ("引文规范", 8), ("体例规范", 8), ("语言与文风", 8),
+    ("润色与语感", 7), ("净度（AI味）", 6), ("官方合规", 7), ("图表质量", 3), ("结构创新度", 3),
 ]
 total = round(sum(scores[d]["got"] for d, _ in DIMS), 1)
 max_total = sum(scores[d]["max"] for d, _ in DIMS)
@@ -504,7 +529,7 @@ else:
     verdict = "不合格：结构性问题，先大修"
 print(f"【判定】{verdict}")
 
-print("\n【十二维得分】（权重×得分）")
+print("\n【十三维得分】（权重×得分）")
 for d, mx in DIMS:
     got = scores[d]["got"]
     ratio = got / mx

@@ -144,14 +144,37 @@ def check_items(items):
         else:
             seen[key] = it["num"]
 
+    # 官方明文：英文文献题名中的实意词首字母大写
+    en_title_issues = []
+    STOP = {"the", "and", "for", "with", "from", "into", "of", "in", "on", "to",
+            "a", "an", "by", "or", "at", "as", "is", "are"}
+    for it in items:
+        m = re.match(r"^(.+?)[\.．]\s*(.+?)\[(J|C|M|D|N|S)", it["raw"])
+        if not m:
+            continue
+        title = m.group(2).strip()
+        if re.search(r"[\u4e00-\u9fff]", title) or not re.search(r"[A-Za-z]{4,}", title):
+            continue
+        words = [w for w in re.findall(r"[A-Za-z][A-Za-z\-]{2,}", title)
+                 if w.lower() not in STOP]
+        lower = [w for w in words if w[0].islower()]
+        if lower:
+            en_title_issues.append((it["num"], title[:36], lower[:3]))
+
     latin_items = [it for it in items if re.search(r"[A-Za-z]{3,}", it["rest"])]
     upper_ok = sum(1 for it in items
                    if it["authors"] and re.search(r"[A-Z]", it["authors"])
                    and re.search(r"[A-Z]{2,}", it["authors"]))
     latin_lower = [it for it in latin_items
                    if it["authors"] and re.match(r"^[a-z]", it["authors"].strip())]
+    if en_title_issues:
+        issues.append((en_title_issues[0][0], "英文题名未大写",
+                       f"{len(en_title_issues)} 条英文文献题名实意词未首字母大写（官方明文）",
+                       en_title_issues[0][1]))
+
     return issues, type_count, dups, {
-        "n_latin": len(latin_items), "upper_ok": upper_ok, "lower_surname": latin_lower}
+        "n_latin": len(latin_items), "upper_ok": upper_ok,
+        "lower_surname": latin_lower, "en_title_issues": en_title_issues}
 
 
 def main():
@@ -185,6 +208,7 @@ def main():
 
     items = [parse_item(t) for t in refs]
     issues, type_count, dups, latin = check_items(items)
+    en_title_issues = latin.get("en_title_issues", [])
 
     print("=" * 62)
     print(f"文献表 GB/T 7714 要素核验：{os.path.basename(PATH)}")
@@ -206,6 +230,14 @@ def main():
         print(f"\n【重复条目】{len(dups)} 组")
         for a, b, k in dups[:10]:
             print(f"  [{a}] 与 [{b}] 内容疑似重复：{k}")
+
+    if en_title_issues:
+        print(f"\n【英文题名大写】\u26a0\ufe0f {len(en_title_issues)} 条英文文献题名实意词未首字母大写"
+              f"（官方明文要求）")
+        for num, t, low in en_title_issues[:5]:
+            print(f"    [{num}] {t}…  小写词：{low}")
+    else:
+        print("\n【英文题名大写】\u2713 英文题名实意词均首字母大写")
 
     if latin["n_latin"]:
         print(f"\n【外文条目】{latin['n_latin']} 条；姓全大写形态 {latin['upper_ok']} 条")

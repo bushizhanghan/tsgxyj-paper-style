@@ -347,6 +347,49 @@ for _f in sorted(_glob.glob(os.path.join(HERE, "*.py"))):
         _miss.append(os.path.basename(_f))
 check("所有脚本带 UTF-8 stdout 保护", not _miss, _miss)
 
+# ============ 4f. 官方须知 + 反哺闭环 ============
+print("[4f] 官方须知与反哺闭环")
+# 官方摘要忌词（比此前更全：+我们/总结了/解决了）
+_ab_bad = dp.scan_abstract("本文分析了某问题，我们总结了经验，提出了建议，解决了难题。")
+_bad_txt = " ".join(_ab_bad["issues"])
+check("官方忌词全六项", all(w in _bad_txt for w in ["本文", "我们", "分析了", "总结了", "提出了", "解决了"]),
+      _ab_bad["issues"])
+check("官方忌词计入issues", len(_ab_bad["issues"]) >= 6, len(_ab_bad["issues"]))
+# 官方关键词语法
+_off = dp.scan_official("关键词：研究；发展；视障服务", [], ["0 引言", "5 结语"], "视障用户的无障碍服务需求")
+check("关键词泛词检出", any("泛词" in i for i in _off["issues"]), _off["issues"])
+check("栏目对位非空", bool(_off["columns"]), _off["columns"])
+check("读者工作优先匹配", _off["columns"][0] == "读者工作", _off["columns"][:3])
+# 官方九栏齐全
+check("官方九栏定义", len(dp.OFFICIAL_COLUMNS) == 9, len(dp.OFFICIAL_COLUMNS))
+# 英文题名大写（ref_format）
+_rf2 = rf.parse_item("[1] KOTIS K. Emerging Technologies in Smart Libraries[J]. Journal, 2025.")
+_iss, _tc, _dp, _lat = rf.check_items([_rf2])
+check("英文题名大写键存在", "en_title_issues" in _lat, list(_lat))
+# 反哺闭环：已见刊/投稿稿判定
+import feedback_loop as fb  # noqa: E402
+_cd3 = corpus.find_corpus_dir()
+if _cd3:
+    _pub, _why = fb.detect_published("某论文_2026(1).docx", _cd3)
+    check("年期次→判为已见刊", _pub is True, _why)
+    _pub2, _why2 = fb.detect_published("我的投稿稿.docx", _cd3)
+    check("无年期次→判为投稿稿", _pub2 is False, _why2)
+# 闭环强弱项提取
+_base2 = corpus.load_reference_stats(_cd3) if _cd3 else None
+if _base2:
+    _m = {"para_med": _base2["paras"]["med"], "sent_mean": _base2["sents"]["med"],
+          "cite_rate": _base2["cites"]["med"], "abs_len": _base2["abs"]["med"],
+          "ref_n": _base2["refs"]["med"], "le_per_1k": 1.0, "bei_per_1k": 0.3,
+          "anti_flagged": [], "abs_elements": {"目的": True, "方法": True,
+                                               "结果": True, "价值": True},
+          "abs_issues": []}
+    _s, _w = fb.strengths_vs_base(_m, _base2)
+    check("达标稿→多长处少短板", len(_s) >= 4 and len(_w) <= 1, (_s, _w))
+    _m2 = dict(_m)
+    _m2.update({"para_med": 50, "ref_n": 5, "anti_flagged": ["三连×化"]})
+    _s2, _w2 = fb.strengths_vs_base(_m2, _base2)
+    check("差稿→检出短板", len(_w2) >= 2, _w2)
+
 # ============ 5. 合成 docx 端到端 ============
 print("[5] 合成 docx 端到端（可选，缺 python-docx 则跳过）")
 print("[5] 合成 docx 端到端（可选，缺 python-docx 则跳过）")

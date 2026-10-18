@@ -133,6 +133,86 @@ SEC_CLASS = [
 ]
 
 
+# ---- 官方合规检查（references/official-guidelines.md 明文要求）----
+# 关键词泛词（官方：「不应出现无检索意义的词，如研究/概述/发展等包含范围过广的词语」）
+KW_BAN = ["研究", "概述", "发展", "探讨", "分析", "初探", "浅析", "综述", "思考", "实践"]
+# 官方九类栏目（用于对位提示）
+OFFICIAL_COLUMNS = {
+    "基础理论（研究进展）": r"理论|学科|范式|知识体系|研究进展|述评",
+    "专业教育": r"教育|培养|课程|素养|教学|人才",
+    "图书馆管理": r"管理|治理|绩效|评价|评估|制度",
+    "数字化、网络化": r"数字化|智慧图书馆|人工智能应用|大语言模型|算法模型|技术架构|网络化",
+    "信息资源建设": r"资源建设|馆藏|采购|开放获取|文献资源|资源整合",
+    "信息组织": r"标引|分类法|元数据|知识组织|本体构建|编目",
+    "信息服务": r"知识服务|信息服务|咨询服务|信息推送|参考咨询",
+    "读者工作": r"读者|用户|障碍|视障|听障|老年|弱势|可及性|无障碍|需求|使用行为",
+    "国外图书馆": r"国外|美国|英国|日本|加拿大|澳大利亚|海外|国际比较",
+}
+
+
+def scan_official(kw_text, refs, titles, alltext):
+    """官方须知合规检查。返回 {issues: [...], columns: [...]}。"""
+    issues = []
+    # ① 关键词泛词
+    kws = [k.strip() for k in re.split(r"[\s;；,，、]+",
+                                       re.sub(r"^【?关\s*键\s*词】?[：:]?", "", kw_text or ""))
+           if k.strip()]
+    for k in kws:
+        for b in KW_BAN:
+            if k == b or (b in k and len(k) <= len(b) + 2):
+                issues.append(f"关键词「{k}」属官方点名的泛词（无检索意义），建议替换")
+                break
+    # ② 英文文献标题实意词首字母大写（官方明文）
+    bad_en = []
+    for r in refs:
+        # 英文条目：含 [J]/[C]/[M] 且题名以拉丁字母为主
+        m = re.match(r"^[\[［]?\s*\d+\s*[\]］]?\s*(.+?)[\.．]\s*(.+?)\[(J|C|M|D|N|S)",
+                     r)
+        if not m:
+            continue
+        title = m.group(2).strip()
+        if not re.search(r"[A-Za-z]{4,}", title):
+            continue
+        if not re.search(r"[\u4e00-\u9fff]", title):
+            # 纯英文题名 → 检查实意词是否首字母大写
+            words = [w for w in re.findall(r"[A-Za-z][A-Za-z\-]{2,}", title)
+                     if w.lower() not in {"the", "and", "for", "with", "from", "into",
+                                          "of", "in", "on", "to", "a", "an", "by", "or"}]
+            lower = [w for w in words if w[0].islower()]
+            if lower:
+                bad_en.append((r[:36], lower[:3]))
+    if bad_en:
+        issues.append(f"{len(bad_en)} 条英文文献题名实意词未首字母大写"
+                      f"（官方明文要求），例：{bad_en[0][1]}")
+    # ③ 栏目对位（按命中次数排序，取最匹配者）
+    col_hits = []
+    for name, pat in OFFICIAL_COLUMNS.items():
+        c = len(re.findall(pat, alltext))
+        if c:
+            col_hits.append((c, name))
+    col_hits.sort(reverse=True)
+    cols = [name for _, name in col_hits]
+    if not cols:
+        issues.append("未能判定所属栏目——官方九栏为：基础理论/专业教育/图书馆管理/"
+                      "数字化网络化/信息资源建设/信息组织/信息服务/读者工作/国外图书馆")
+    # ④ 注释序号递增（官方：按递增顺序，同一文献不重复给号）
+    nums = []
+    for r in refs:
+        m = re.match(r"^[\[［]?\s*(\d{1,3})", r)
+        if m:
+            nums.append(int(m.group(1)))
+    if nums and nums != sorted(nums):
+        issues.append("参考文献序号非递增排列（官方要求按递增顺序）")
+    if nums and len(nums) != len(set(nums)):
+        issues.append("参考文献有重复序号（官方要求同一文献用同一序号、不重复给号）")
+    # ⑤ 末章名称（官方序列写「结语」）
+    has_jieyu = any(re.search(r"结\s*语", t) for t in titles)
+    has_jielun = any(re.search(r"结\s*论|结束语|余论", t) for t in titles)
+    if has_jielun and not has_jieyu:
+        issues.append("末章名为「结论/结束语」——官方格式序列写「结语」，建议对齐")
+    return {"issues": issues, "columns": cols, "kws": kws, "en_title_issues": len(bad_en)}
+
+
 def scan_sections(paras, titles):
     """按标题切分正文，统计各章字数与占比。paras 为 [(style, text)]。"""
     # 标题在全文段中的位置
@@ -180,25 +260,33 @@ def scan_sections(paras, titles):
 
 
 def scan_abstract(abs_text, title_heads=""):
-    """摘要四要素体检（依据 references/section-guides.md 四要素公式）：
-    为什么做 → 怎么做 → 发现什么 → 什么价值。
-    仅做形态提示，不判定内容质量。"""
+    """摘要四要素体检（section-guides.md 四要素公式 + official-guidelines.md 官方忌词/字数）。
+
+    为什么做 → 怎么做 → 发现什么 → 什么价值。仅做形态提示，不判定内容质量。
+    """
     t = clean(re.sub(r"^【?摘\s*要】?[：:]?\n?", "", abs_text or ""))
     if not t:
         return {"present": False}
     issues = []
-    # 忌词
-    for w in ("本文", "分析了", "提出了"):
+    # 忌词（官方明文：分析了/总结了/提出了/解决了/我们/本文）
+    OFFICIAL_TABOO = {
+        "本文": "官方明文忌用（须第三人称）",
+        "我们": "官方明文忌用（须第三人称）",
+        "分析了": "官方明文忌用",
+        "总结了": "官方明文忌用",
+        "提出了": "官方明文忌用",
+        "解决了": "官方明文忌用",
+    }
+    for w, why in OFFICIAL_TABOO.items():
         if w in t:
-            issues.append(f"含忌词「{w}」（该刊摘要全第三人称）")
-    # 长度
+            issues.append(f"含忌词「{w}」——{why}")
+    # 字数：官方「200 字左右」，实测中位 262
     n = len(t)
-    if n < 200:
-        issues.append(f"{n} 字偏短（该刊实测 200–300 为主流，中位 262）")
+    if n < 180:
+        issues.append(f"{n} 字偏短（官方要求 200 字左右；实测中位 262）")
     elif n > 320:
-        issues.append(f"{n} 字偏长（该刊 300 字以上仅 30 篇）")
-    # 四要素启发式：目的（为/旨在/面向/针对）、方法（采用/以…为对象/基于）、
-    # 结果（表明/发现/结果显示/构建）、价值（提供/为…提供参考/依据/建议）
+        issues.append(f"{n} 字偏长（官方要求 200 字左右；该刊 300 字以上仅 30 篇）")
+    # 四要素启发式：目的/方法/结果/价值
     sents = [s for s in re.split(r"[。；;]", t) if s]
     joined = t
     pools = {
@@ -211,10 +299,11 @@ def scan_abstract(abs_text, title_heads=""):
     for k in ("目的", "方法", "结果", "价值"):
         if not has[k]:
             issues.append(f"未检出「{k}」要素信号（{pools[k].strip()}）——请人工确认")
-    # 虚句
-    for w in ("取得了良好效果", "起到了积极作用", "效果显著", "具有重要意义"):
+    # 空洞评语与自我评价（官方：无空洞评语，不进行自我评价）
+    for w in ("取得了良好效果", "起到了积极作用", "效果显著", "具有重要意义",
+              "具有重要价值", "填补了空白", "具有推广价值"):
         if w in t:
-            issues.append(f"虚句「{w}」——结果句需具体内容")
+            issues.append(f"空洞评语「{w}」——官方要求无空洞评语、不自我评价")
     return {"present": True, "chars": n, "n_sents": len(sents),
             "elements": has, "issues": issues}
 
@@ -393,6 +482,7 @@ def main():
     para_issues = scan_paragraphs(m["body"])
     struct = scan_structure(m["titles"])
     secs = scan_sections(paras, m["titles"])
+    official = scan_official(kw_text, refs, m["titles"], "".join(clean(p) for p in body))
 
     lines = []
     lines.append("=" * 62)
@@ -418,6 +508,21 @@ def main():
     if abs_text:
         lines.append(f"  摘要开头80字：{clean(abs_text)[:80]}")
         lines.append(f"  摘要忌词：本文×{abs_text.count('本文')} 分析了×{abs_text.count('分析了')} 提出了×{abs_text.count('提出了')}")
+
+    # 【官方合规】——官方须知明文要求，优先级高于所有实证基线
+    lines.append("\n【⓪ 官方须知合规】（references/official-guidelines.md 明文要求）")
+    if official["columns"]:
+        lines.append(f"  栏目对位：{'、'.join(official['columns'][:3])}"
+                     f"（官方九栏之一，投稿时须注明）")
+    else:
+        lines.append("  栏目对位：未判定")
+    if official["issues"]:
+        for it in official["issues"]:
+            lines.append(f"  ⚠️ {it}")
+    else:
+        lines.append("  ✓ 官方明文项：未发现问题")
+    lines.append("  （官方要点：摘要约 200 字、忌 本文/我们/分析了/总结了/提出了/解决了、"
+                 "投稿邮箱 tsgxyj@vip.163.com、审稿时限 7 周、2022 年起月刊）")
     if abst.get("present"):
         elem_str = "".join("✓" if abst["elements"][k] else "✗" for k in ("目的", "方法", "结果", "价值"))
         lines.append(f"  四要素体检（目的/方法/结果/价值）：{elem_str}"
@@ -436,13 +541,15 @@ def main():
     lines.append(f"  表 {m['tab_n']}张" + fmt_pos(m["tab_n"], base["tabs"]))
     lines.append(f"  「本文」{m['benwen']}次 = {m['benwen_rate']:.2f}/万字" +
                  fmt_pos(m["benwen_rate"], base["benwen"]))
-    # 红线合计（供 check_all.py 抓取；反模式超标 / 结构缺标配 / 摘要红线）
+    # 红线合计（供 check_all.py 抓取；官方合规 / 反模式超标 / 结构缺标配 / 摘要红线）
     n_anti = sum(1 for a in ant if a["flag"])
     n_struct = sum(1 for x in ("对策/策略/路径/启示（收口标配）", "结语") if x in struct["missing"])
     n_abs = sum(1 for i in abst.get("issues", []) if "忌词" in i or "虚句" in i or "偏长" in i)
-    n_red = n_anti + n_struct + n_abs
-    lines.append(f"  [红线合计] {n_red} 项（反模式超标 {n_anti} / 结构缺标配 {n_struct} / "
-                 f"摘要红线 {n_abs}）" + ("——0 红线，形式层可投" if n_red == 0 else "——见下"))
+    n_off = len(official.get("issues", []))
+    n_red = n_anti + n_struct + n_abs + n_off
+    lines.append(f"  [红线合计] {n_red} 项（官方合规 {n_off} / 反模式超标 {n_anti} / "
+                 f"结构缺标配 {n_struct} / 摘要红线 {n_abs}）"
+                 + ("——0 红线，形式层可投" if n_red == 0 else "——见下"))
 
     if secs and not "--brief" in flags:
         lines.append("\n【②b 章节占比】")
@@ -504,6 +611,9 @@ def main():
     if "--brief" in flags:
         brief_lines.append("【优先处理（红线）】")
         red_items = []
+        # 官方明文项优先级最高
+        for it in official.get("issues", []):
+            red_items.append(f"  ⚠️ [官方] {it}")
         for a in red:
             red_items.append(f"  ⚠️ {a['name']}：{a['n']} 处（基线 {a['base']}）{a['sample']}")
         for must in ("对策/策略/路径/启示（收口标配）", "结语"):
@@ -536,8 +646,8 @@ def main():
     if "--json" in flags:
         out = {
             "doc": os.path.basename(path), "metrics": m, "abstract": abst,
-            "structure": struct, "sections": secs, "anti": ant,
-            "paragraph_issues": para_issues,
+            "structure": struct, "sections": secs, "official": official,
+            "anti": ant, "paragraph_issues": para_issues,
             "baseline": {"source": base["source"], "static": base["static"],
                          "med": {k: v.get("med") for k, v in base.items() if isinstance(v, dict)}},
         }

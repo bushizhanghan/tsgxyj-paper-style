@@ -27,7 +27,7 @@
 | B 改写 | 保真改稿 | 先测段再动手；词层优先于句层；幅度上限 ±10%；不增饰 |
 | C 新写 | 新章节 | 写作前必答四问；骨架与「对策—发现」对仗表确认后动笔 |
 | D 引用核验 | 投稿前 | 序号连续 / 正文—列表对应 / 标注形态 / 语料库溯源四项核验 |
-| E 模拟审稿 | 投稿前 | 12 维 × 100 分制打分卡 + 按失分排序的修改路线图（声明：特征模拟，非真实评审） |
+| E 模拟审稿 | 投稿前 | 13 维 × 100 分制打分卡 + 按失分排序的修改路线图（声明：特征模拟，非真实评审） |
 | F 回复审稿 | 返修阶段 | 逐条回应制 + 投稿邮件与材料模板 |
 
 > 投稿前一条命令跑完六项（GB/T 7714 + D + A + 润色体检 + E + G）：`python scripts/check_all.py 论文.docx`（自动汇总红线/待办与模拟审稿分数，退出码 0 = 无红线）。
@@ -40,7 +40,7 @@ references/
   style-rules.md                # 九维量化规则（每条带数据出处）
   section-guides.md             # 分节写作配方（引言到结语 + 写作前必答问题）
   rewrite-examples.md           # 改写操作纪律 + 三版正反示范
-  reviewer-simulation.md        # 模拟审稿 12 维 100 分制打分卡 + 真实审稿意见特征
+  reviewer-simulation.md        # 模拟审稿 13 维 100 分制打分卡 + 真实审稿意见特征
   response-template.md          # 回复审稿意见 + 投稿邮件模板
   checklists.md                 # 投稿前体例自检清单
   anti-patterns.md              # 反模式清单（原文实测分级：A 级红线/B 级控密度 + 分条偏好）
@@ -56,13 +56,14 @@ scripts/
   analyze_corpus.py             # 原文模式挖掘（7 维句式统计，产出 patterns.md）
   polish_lexicon.py             # 润色词典（口语→书面次数实证/程度词/句法，产出 polish-lexicon.md）
   language_audit.py             # 整稿语言体检（七类逐句定位：口语词/强断言/了/被/即/反模式）
-  mock_review.py                # 模式 E：模拟审稿 12 维 100 分制自动打分 + 修改路线图
+  mock_review.py                # 模式 E：模拟审稿 13 维 100 分制自动打分 + 修改路线图
   verify_refs.py                # 模式 D：参考文献四项核验
   ref_format.py                 # GB/T 7714 文献表要素/形态核验（误报防护）
   citation_analysis.py          # 引文结构与时效分析（对照 5115 条文献基准）
   benchmark_paper.py            # 模式 G：百分位对标评估
   check_all.py                  # 投稿前一键总检（7714+D+A+润色+E+G 六工具串联）
-  selftest.py                   # 工具链自检（140 项断言，含 xref 往返，改脚本后必跑）
+  feedback_loop.py              # 审查反哺闭环（已见刊全面吸收/用户稿只取长处）
+  selftest.py                   # 工具链自检（151 项断言，含 xref 往返，改脚本后必跑）
   build_xref.py / unfield_refs.py / xref_verify.py   # Word 交叉引用域
 ```
 
@@ -109,7 +110,7 @@ python scripts/language_audit.py 论文.docx             # A 类口语词非空�
 python scripts/language_audit.py 论文.docx --only A,D  # 只查口语词与「了」
 python scripts/language_audit.py 论文.docx --limit 20  # 每类显示 20 条
 
-# 模式 E 模拟审稿（12 维 100 分制）
+# 模式 E 模拟审稿（13 维 100 分制）
 python scripts/mock_review.py 论文.docx               # <60 分退出码 1
 python scripts/mock_review.py 论文.docx --strict      # 扣分 ×1.5
 
