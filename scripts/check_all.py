@@ -6,7 +6,7 @@
     ② 引用标注与对应核验（verify_refs.py，模式 D）
     ③ 论文诊断（diagnose_paper.py，模式 A）
     ④ 整稿语言体检（language_audit.py，润色词典落地）
-    ⑤ 模拟审稿 7 维打分（mock_review.py，模式 E）
+    ⑤ 模拟审稿 13 维打分（mock_review.py，模式 E）
     ⑥ 对标评估（benchmark_paper.py，模式 G）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 
