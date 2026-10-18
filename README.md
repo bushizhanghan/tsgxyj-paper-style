@@ -62,6 +62,7 @@ scripts/
   citation_analysis.py          # 引文结构与时效分析（对照 5115 条文献基准）
   benchmark_paper.py            # 模式 G：百分位对标评估
   check_all.py                  # 投稿前一键总检（7714+D+A+润色+E+G 六工具串联）
+  fetch_reviews_direct.py       # 投稿者反馈抓取与解析（维护 submission-reality.md）
   feedback_loop.py              # 审查反哺闭环（已见刊全面吸收/用户稿只取长处）
   selftest.py                   # 工具链自检（151 项断言，含 xref 往返，改脚本后必跑）
   build_xref.py / unfield_refs.py / xref_verify.py   # Word 交叉引用域

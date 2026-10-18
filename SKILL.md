@@ -88,6 +88,7 @@ metadata:
 - `ref_format.py <论文.docx>` — **GB/T 7714 文献表核验**：要素完整性（作者/年份/类型标识/卷期/出版地）、页码区间颠倒（排除日期与标准号误报）、重复条目、类型分布、外文姓全大写；`--json` 附结果
 - `check_all.py <论文.docx>` — **投稿前一键总检**：串联 ref_format → verify_refs → citation_analysis → diagnose → language_audit → mock_review → benchmark，自动汇总红线/待办与模拟审稿分数；`--quick` 只跑前两项、`--no-review` 跳过模拟审稿；退出码 0 = 无红线
 - `benchmark_paper.py <论文.docx>` — **模式 G 主工具**：百分位对标评估（语料库自动定位 + `--json`）
+- `fetch_reviews_direct.py [--pages 起 止]` — **投稿者反馈抓取与解析**（直连抓取该刊点评页并结构化，用于维护 submission-reality.md）；`--analyze-only` 只分析缓存
 - `feedback_loop.py <论文.docx>` — **审查反哺闭环**：自动判定「已见刊论文 / 用户投稿稿」——已见刊走**全面吸收**（更新 corpus_stats.json 并重算基准）；用户稿走**只取长处**（沉淀正面样本，绝不污染基准）；`--report` 查看累积观察，`--dry-run` 预演；短板/长处累计 ≥5 次时提示可调整阈值
 - `selftest.py` — **工具链自检**：151 项断言（指标计算、结构/摘要体检、GB/T 7714 核验与误报防护、检索逻辑、原文模式挖掘、润色词典、引文分析、模拟审稿与语言体检、合成 docx 端到端、xref 域化/退域往返），改脚本后必跑，退出码 0 = 全过
 

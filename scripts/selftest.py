@@ -390,6 +390,50 @@ if _base2:
     _s2, _w2 = fb.strengths_vs_base(_m2, _base2)
     check("差稿→检出短板", len(_w2) >= 2, _w2)
 
+# ============ 4g. 投稿反馈抓取与预判 ============
+print("[4g] 投稿反馈抓取与预判")
+import fetch_reviews_direct as fr
+
+check("审稿时间解析(日)", fr.parse_days("15日内") == 15, fr.parse_days("15日内"))
+check("审稿时间解析(月)", fr.parse_days("3个月") == 90, fr.parse_days("3个月"))
+check("审稿时间解析(空)", fr.parse_days("-") is None and fr.parse_days("") is None)
+check("标签清洗", "<b>x</b>" not in fr.strip_tags("<b>x</b>"))
+# 解析器：构造最小 HTML 片段
+_frag = ('<div class="onedpinfo" x>'
+         '<p>张三 在 2025/4/29 15:02:41 进行点评</p>'
+         '<ul><li>审稿时间：<span>3个月</span></li>'
+         '<li>我的学历：<span>在读硕士</span></li>'
+         '<li>是否录用：<span>修后录用</span></li></ul>'
+         '<p><span>我的点评：</span>查重要求cnki查重全文7%以下，见刊较快，建议投递。</p>'
+         '</div>')
+_rec = fr.parse_html(_frag)
+check("解析出1条记录", len(_rec) == 1, len(_rec))
+if _rec:
+    check("解析日期", _rec[0].get("date") == "2025/4/29", _rec[0].get("date"))
+    check("解析属性列", _rec[0].get("审稿时间") == "3个月", _rec[0].get("审稿时间"))
+    check("解析录用结果", _rec[0].get("是否录用") == "修后录用")
+    check("解析点评正文", "查重" in (_rec[0].get("comment") or ""), _rec[0].get("comment"))
+
+# 文档一致性：submission-reality.md 存在且含关键结论
+_ref_dir = os.path.join(os.path.dirname(HERE), "references")
+_sr = os.path.join(_ref_dir, "submission-reality.md")
+check("submission-reality.md 存在", os.path.isfile(_sr))
+if os.path.isfile(_sr):
+    _t = io.open(_sr, encoding="utf-8").read()
+    check("含查重7%结论", "7%" in _t and "去除引用" in _t)
+    check("含周期中位数", "中位" in _t and "15 天" in _t)
+    check("含主题对位建议", "喜好的主题" in _t)
+    check("含样本数120", "120" in _t)
+
+# 官方须知一并校验
+_og = os.path.join(_ref_dir, "official-guidelines.md")
+check("official-guidelines.md 存在", os.path.isfile(_og))
+if os.path.isfile(_og):
+    _t2 = io.open(_og, encoding="utf-8").read()
+    check("官方含九栏目", _t2.count("读者工作") >= 1 and _t2.count("国外图书馆") >= 1)
+    check("官方含投稿邮箱", "tsgxyj@vip.163.com" in _t2)
+    check("官方含月刊更正", "月刊" in _t2)
+
 # ============ 5. 合成 docx 端到端 ============
 print("[5] 合成 docx 端到端（可选，缺 python-docx 则跳过）")
 print("[5] 合成 docx 端到端（可选，缺 python-docx 则跳过）")

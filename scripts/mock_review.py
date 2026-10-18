@@ -579,6 +579,29 @@ if prio:
 else:
     print("  无显著失分项。建议进入语言润色环节（polish-lexicon.md）。")
 
+# ---------- 投稿预判（依据 references/submission-reality.md 的 60 条实测） ----------
+print("\n" + "─" * 70)
+print("投稿预判（依据 120 条投稿者实测反馈）")
+print("─" * 70)
+_words = m["body_chars"]
+if _words < 9000:
+    _wt = f"偏短（{_words} 字，实测投稿集中 10000–15000 字）"
+elif _words > 16000:
+    _wt = f"偏长（{_words} 字，实测投稿集中 10000–15000 字）"
+else:
+    _wt = f"合适（{_words} 字，落在实测 10000–15000 字区间）"
+print(f"  · 字数：{_wt}")
+_cols = dp.scan_official(kw_text, refs, m["titles"], alltext).get("columns", [])
+if _cols:
+    print(f"  · 栏目对位：{_cols[0]}（投稿时须注明；投稿者反馈「按期刊喜好主题投稿，录用概率会很高」）")
+else:
+    print("  · 栏目对位：未判定——须人工确认属官方九栏之一")
+print("  · 周期预期：初审 7–15 天出结果（中位 15 天）；过 1 个月无消息多在外审")
+print("  · 风险信号：15 天内回复多为退稿或极快录用（两极）；直接录用 20 条 vs 修后录用 13 条")
+print("  · 查重：官方要求「总文字复制比<7%」「去除引用≈0」，未通过不予排版，按 5% 准备")
+print("  · 见刊：约 2 个月排期；不收版面费、纸刊不到付")
+print("  · 不建议频繁催问（多位投稿者反馈）")
+
 print("\n【免责】本报告为刊文特征模拟，非该刊真实审稿标准；选题价值与创新性判断标【仅参考】。")
 
 if "--json" in _flags:
