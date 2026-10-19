@@ -317,11 +317,36 @@ print("[4e] 回归保护")
 import glob as _glob
 
 # 每个 subprocess.run 调用都应带 errors=replace（避免 UnicodeDecodeError 让 r.stdout 变 None）
+# 注意：参数常跨行书写，故按「从 subprocess.run( 起到配对的 ) 为止」的块判定；
+# 并跳过本断言自身的字符串字面量行，否则会把自己算成一次调用。
 _st = io.open(os.path.join(HERE, "selftest.py"), encoding="utf-8").read()
-_calls = _st.count("subprocess.run(")
-_safe = _st.count('encoding="utf-8", errors="replace"')
-check("selftest subprocess 全带 errors=replace", _calls > 0 and _calls <= _safe,
-      (_calls, _safe))
+_lines = _st.splitlines()
+_calls, _bad = 0, []
+for _ln, _line in enumerate(_lines):
+    if "subprocess.run(" not in _line:
+        continue
+    if "_st." in _line or "_lines" in _line or "not in _line" in _line:
+        continue                      # 断言自身（含 _st.splitlines()/检测串），不计
+    if _line.lstrip().startswith("#"):
+        continue                      # 注释行（含说明性文本），不计
+    # 取该调用块：起行 + 后续 6 行（足够覆盖参数跨行）
+    _block = "\n".join(_lines[_ln:_ln + 7])
+    # 截到该调用闭合：第一个在深度归零处的 ')'
+    _depth, _end = 0, len(_block)
+    for _i, _ch in enumerate(_block):
+        if _ch == "(":
+            _depth += 1
+        elif _ch == ")":
+            _depth -= 1
+            if _depth == 0:
+                _end = _i + 1
+                break
+    _block = _block[:_end]
+    _calls += 1
+    if 'errors="replace"' not in _block:
+        _bad.append(_ln + 1)
+check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
+      f"调用 {_calls} 个，缺 errors 的行 {_bad}")
 
 # check_all 跳过逻辑按脚本名而非显示序号
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
@@ -1203,6 +1228,91 @@ if HAVE_DOCX:
             _b_reader = corpus.load_reference_stats(_cd_test, column="读者工作")
             check("分栏目基线包含来源标注", "读者工作" in _b_reader.get("source", ""), _b_reader.get("source"))
             check("分栏目基线包含完整指标", "paras" in _b_reader and "figs" in _b_reader)
+
+        # ---- 8j. 装饰性引用检测（citation_quality） ----
+        print("[8j] citation_quality（引文—论点关联）")
+        import citation_quality as cq
+        # 引用点解析：单个 / 范围式 / 列举式 / 混合式
+        _c1 = cq.parse_citations("见文献[3]的论述")
+        check("cq 单个引用点解析", _c1 and _c1[0][1] == [3] and not _c1[0][2], str(_c1))
+        _c2 = cq.parse_citations("标准体系[2-5]共同构成")
+        check("cq 范围式展开", _c2 and _c2[0][1] == [2, 3, 4, 5] and not _c2[0][2], str(_c2))
+        _c3 = cq.parse_citations("已有研究[8,9]指出")
+        check("cq 列举式解析", _c3 and _c3[0][1] == [8, 9] and not _c3[0][2], str(_c3))
+        _c4 = cq.parse_citations("混合式[1-3,7]不用")
+        check("cq 混合式标记", _c4 and _c4[0][2] is True, str(_c4))
+        # 主题词切分：不跨块（不产生「视障老年」粘接碎片）
+        _at = cq.arg_terms("已有研究多聚焦单一群体（以视障、老年为主）")
+        check("cq 按块切分不粘接", "视障老年" not in _at, str(sorted(_at))[:200])
+        # 关联评分：同词/子串
+        _s1, _m1 = cq.score_pair({"视障", "老年"}, {"视障", "用户"})
+        check("cq 同词命中计分", _s1 >= 1.0 and _m1, f"{_s1} {_m1}")
+        _s2, _ = cq.score_pair({"图书馆"}, {"图书馆学"})
+        check("cq 子串包含计分", 0.4 <= _s2 <= 0.6, str(_s2))
+        _s3, _ = cq.score_pair({"苹果"}, {"香蕉"})
+        check("cq 无交集计零分", _s3 == 0.0, str(_s3))
+        # 挂靠形态识别
+        check("cq 识别规范挂靠", cq.is_attached("郭亚军等[7]指出该问题普遍存在"))
+        check("cq 无挂靠句不误判", not cq.is_attached("该问题普遍存在[7]"))
+        # 端到端：合成稿
+        _cq_doc = os.path.join(td, "cq.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象，采用问卷法。")
+        _d.add_paragraph("关键词：A；B")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("既有研究在视障用户的无障碍服务方面已有探索，"
+                         "郭亚军等[1]指出视障用户的信息获取存在明显障碍。")
+        _d.add_paragraph("本研究聚焦多元障碍群体的适配机制。")
+        _d.add_paragraph("1 方法")
+        _d.add_paragraph("采用问卷调查法开展研究，样本覆盖多家机构。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 郭亚军, 李帅. 视障用户信息无障碍服务研究[J]. 图书馆论坛, 2022, 42(1): 1-9.")
+        _d.save(_cq_doc)
+        _rq = subprocess.run([sys.executable, os.path.join(HERE, "citation_quality.py"),
+                              _cq_doc], capture_output=True, encoding="utf-8", errors="replace")
+        check("cq 端到端正常运行", "引文—论点关联核验" in _rq.stdout, _rq.stdout[:200])
+        check("cq 有分档统计", "🔴" in _rq.stdout and "🟡" in _rq.stdout, _rq.stdout[:300])
+
+        # ---- 8k. 投稿就绪度看板（progress_dashboard） ----
+        print("[8k] progress_dashboard（投稿就绪度）")
+        import progress_dashboard as pdash
+        check("pd 七项指标已定义", hasattr(pdash, "collect") and hasattr(pdash, "render"))
+        check("pd 目标分常量 85", pdash.REVIEW_TARGET == 85.0, str(pdash.REVIEW_TARGET))
+        check("pd 投稿包三要素", len(pdash.PACKAGE_ITEMS) == 3, str(pdash.PACKAGE_ITEMS))
+        _rpd = subprocess.run([sys.executable, os.path.join(HERE, "progress_dashboard.py"),
+                               _cq_doc], capture_output=True, encoding="utf-8",
+                              errors="replace", timeout=300)
+        _po = _rpd.stdout or ""
+        check("pd 端到端正常运行", "投稿就绪度" in _po, _po[:200])
+        check("pd 输出达标总览", "达标总览" in _po, _po[:300])
+        check("pd 输出七项逐条", sum(1 for _i in range(1, 8) if f"{_i}. " in _po) >= 7, _po[:400])
+        check("pd 输出修复建议或全部就绪",
+              "最优先修复建议" in _po or "全部达标" in _po, _po[-300:])
+        check("pd 退出码语义 0/1/2", _rpd.returncode in (0, 1, 2), str(_rpd.returncode))
+
+        # ---- 8l. 审稿意见分类助手（review_triage） ----
+        print("[8l] review_triage（审稿意见分类）")
+        import review_triage as rt
+        check("rt 四分类标签齐全",
+              all(hasattr(rt, a) for a in ("CAT_MUST", "CAT_Q", "CAT_SUG", "CAT_PRAISE")),
+              [a for a in dir(rt) if a.startswith("CAT_")][:12])
+        # 合成混合意见样例
+        _rt_in = os.path.join(td, "reviews.md")
+        with open(_rt_in, "w", encoding="utf-8") as _f:
+            _f.write("审稿人1：\n"
+                     "意见1：论文选题具有价值，结构完整。\n"
+                     "意见2：请核对摘要中的样本量，存在数据不一致，必须修正。\n"
+                     "意见3：为何未采用问卷调查法？请说明理由。\n"
+                     "意见4：建议补充对读者画像的分析。\n")
+        _rrt = subprocess.run([sys.executable, os.path.join(HERE, "review_triage.py"),
+                               "--reviews", _rt_in], capture_output=True,
+                              encoding="utf-8", errors="replace")
+        _ro = _rrt.stdout or ""
+        check("rt 端到端正常运行", "审稿意见分类" in _ro, _ro[:200])
+        check("rt 四类均输出", all(k in _ro for k in ("必改", "疑问", "建议", "表扬")), _ro[:400])
+        check("rt 分类统计行", "分类统计" in _ro, _ro[:300])
+        check("rt 含处理策略", "处理策略" in _ro, _ro[-400:])
+        check("rt 必改优先于建议", _ro.find("必改") < _ro.find("建议"), _ro[:400])
 
 else:
     print("  （跳过：未安装 python-docx）")
