@@ -352,9 +352,9 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 三十九项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 四十项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联三十九个工具", len(_tools_in) == 39, (_tools_in, len(_tools_in)))
+check("check_all 串联四十个工具", len(_tools_in) == 40, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
@@ -365,6 +365,7 @@ for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.
               "ref_year_check.py", "ref_type_check.py", "ref_dup_check.py",
               "chapter_balance.py", "intro_scale.py", "heading_naming.py",
               "le_density.py", "ji_density.py", "hedge_ratio.py",
+              "abstract_keyword_link.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -396,6 +397,8 @@ check("check_all ㉞㉟㠀 接入小结",
 check("check_all ㊱㊲㊳ 接入小结",
       "「了」密度" in _ca and "「即」密度" in _ca and "程度词比率" in _ca,
       "㊱㊲㊳ 小结未接入")
+check("check_all ㊴ 接入小结",
+      "摘要—关键词脱节" in _ca, "㊴ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -2216,6 +2219,34 @@ if HAVE_DOCX:
         check("hgr 检出强断言失衡", "谨慎性" in _hgo and _rhg.returncode == 1, _hgo[:400])
         check("hgr 输出双方词频", "【审慎词】" in _hgo and "【强断言词】" in _hgo,
               _hgo[:400])
+
+        # ---- 9n. 摘要—关键词关联（abstract_keyword_link） ----
+        print("[9n] abstract_keyword_link（摘要—关键词关联）")
+        import abstract_keyword_link as akl
+        check("akl 关键词切分", len(akl.split_kws("【关键词】A；B；C")) == 3)
+        check("akl 整词包含命中", akl.kw_in_abstract("多元障碍群体", "针对多元障碍群体的研究"))
+        check("akl 子串命中", akl.kw_in_abstract("智慧图书馆", "面向智慧图书馆服务的研究"))
+        check("akl 未出现不误判", not akl.kw_in_abstract("信息服务", "针对多元障碍群体的研究"))
+        _akl_doc = os.path.join(td, "akl.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以多元障碍群体为对象，构建智能帮扶机制并验证其可用性，"
+                         "为图书馆无障碍服务提供参考。")
+        _d.add_paragraph("关键词：多元障碍群体；智能帮扶；信息服务；数据要素；无障碍环境")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_akl_doc)
+        _rak = subprocess.run([sys.executable, os.path.join(HERE, "abstract_keyword_link.py"),
+                               _akl_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _ako = _rak.stdout or ""
+        check("akl 端到端正常运行", "摘要与关键词关联核验" in _ako, _ako[:200])
+        check("akl 检出脱节", "关键词与摘要脱节" in _ako and _rak.returncode == 1,
+              _ako[:400])
+        check("akl 输出逐词命中", "✓" in _ako and "✗" in _ako, _ako[:500])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:

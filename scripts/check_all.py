@@ -41,6 +41,7 @@
     ㊱ 「了」密度（le_density.py，单段≥4 待办级）
     ㊲ 「即」解释句式密度（ji_density.py，提示级）
     ㊳ 程度词比率（hedge_ratio.py，强断言>75% 待办级）
+    ㊴ 摘要—关键词关联（abstract_keyword_link.py，过半关键词未在摘要出现待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -126,6 +127,7 @@ TOOLS = [
     ("㊱ 「了」密度", "le_density.py", False),
     ("㊲ 「即」解释句式密度", "ji_density.py", False),
     ("㊳ 程度词比率", "hedge_ratio.py", False),
+    ("㊴ 摘要—关键词关联", "abstract_keyword_link.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -577,6 +579,16 @@ elif m:
         print(f"· 程度词比率：强断言 {_m2.group(1)}%（提示级偏离，见 ㊳）")
     else:
         print("· 程度词比率：✓ 均衡")
+
+# ㊴ 摘要—关键词关联：过半未出现 → 待办
+ak_out = results.get("㊴ 摘要—关键词关联", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项关联问题", ak_out)
+if m and int(m.group(1)):
+    _m2 = re.search(r"(\d+)/(\d+) 个关键词未在摘要出现", ak_out)
+    todos.append(f"摘要—关键词脱节（{_m2.group(1)}/{_m2.group(2)} 未在摘要出现，见 ㊴）"
+                 if _m2 else "摘要—关键词脱节（见 ㊴）")
+elif m:
+    print("· 摘要—关键词关联：✓ 良好")
 
 print()
 if red_flags:
