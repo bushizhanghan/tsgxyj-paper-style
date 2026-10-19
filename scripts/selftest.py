@@ -352,12 +352,13 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 十八项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 二十项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联十八个工具", len(_tools_in) == 18, (_tools_in, len(_tools_in)))
+check("check_all 串联二十个工具", len(_tools_in) == 20, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
+              "corpus_similarity.py", "conclusion_echo.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -367,6 +368,8 @@ check("check_all ⑬⑭⑮ 接入小结",
 check("check_all ⑯⑰⑱ 接入小结",
       "结构性失引" in _ca and "图表与正文数字冲突" in _ca and "投稿材料包待补" in _ca,
       "⑯⑰⑱ 小结未接入")
+check("check_all ⑲⑳ 接入小结",
+      "高度相合" in _ca and "摘要—结语呼应" in _ca, "⑲⑳ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1520,6 +1523,99 @@ if HAVE_DOCX:
               _pko[:600])
         check("spk 输出简介与联系方式要素",
               "作者简介要素" in _pko and "联系方式要素" in _pko, _pko[:400])
+
+        # ---- 8s. 与已见刊论文句面相合度（corpus_similarity） ----
+        print("[8s] corpus_similarity（句面相合度）")
+        import corpus_similarity as cs
+        check("cs shingle 与归一化", len(cs.shingles(cs.normalize("这是一句测试文本内容"))) > 0)
+        check("cs 归一化去引用点", "[1]" not in cs.normalize("本研究指出[1]该问题"))
+        _cd_sim = corpus.find_corpus_dir()
+        if _cd_sim:
+            _idx, _sents = cs.build_index(_cd_sim)
+            check("cs 索引非空", len(_sents) > 100 and len(_idx) > 1000,
+                  (len(_sents), len(_idx)))
+            # 用语料自身一句做正样本：应与自身高度相似
+            _probe = None
+            for _paper in corpus.load_paragraphs(_cd_sim)[:3]:
+                for _p in (_paper.get("paras") or []):
+                    for _s in cs.sentences_of(_p):
+                        _nz = cs.normalize(_s)
+                        if len(_nz) >= 30:
+                            _probe = _s
+                            break
+                    if _probe:
+                        break
+                if _probe:
+                    break
+            if _probe:
+                _sc, _best = cs.match_sentence(cs.normalize(_probe),
+                                               cs.shingles(cs.normalize(_probe)),
+                                               _idx, _sents)
+                check("cs 自身句匹配高相似", _sc >= 0.9, f"{_sc:.2f}")
+        # 合成稿：植入见刊原句 → 应检出高度相合
+        _cs_doc = os.path.join(td, "cs.docx")
+        _probe2 = None
+        if _cd_sim:
+            for _paper in corpus.load_paragraphs(_cd_sim)[:2]:
+                for _p in (_paper.get("paras") or []):
+                    for _s in cs.sentences_of(_p):
+                        _nz = cs.normalize(_s)
+                        if 30 <= len(_nz) <= 90:
+                            _probe2 = _s
+                            break
+                    if _probe2:
+                        break
+                if _probe2:
+                    break
+        if _probe2:
+            _d = Document()
+            _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+            _d.add_paragraph("关键词：A；B；C；D")
+            _d.add_paragraph("0 引言")
+            _d.add_paragraph("随着数字技术发展，图书馆服务发生深刻变化，相关研究日益丰富。")
+            _d.add_paragraph(_probe2)
+            _d.add_paragraph("1 研究设计")
+            _d.add_paragraph("本研究以多元障碍群体为对象，采用混合方法开展研究工作。")
+            _d.add_paragraph("2 结语")
+            _d.add_paragraph("本研究完成了相关研究设计与验证工作。")
+            _d.add_paragraph("参考文献")
+            _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+            _d.save(_cs_doc)
+            _rcs = subprocess.run([sys.executable, os.path.join(HERE, "corpus_similarity.py"),
+                                   _cs_doc], capture_output=True, encoding="utf-8",
+                                  errors="replace")
+            _cso = _rcs.stdout or ""
+            check("cs 端到端检出植入原文", "高度相合" in _cso and _rcs.returncode == 1,
+                  _cso[:500])
+            check("cs 输出命中篇目", "命中" in _cso, _cso[:500])
+
+        # ---- 8t. 摘要与结语呼应（conclusion_echo） ----
+        print("[8t] conclusion_echo（摘要—结语呼应）")
+        import conclusion_echo as ce
+        check("ce 承诺抽取含数量", any(p["quant"] for p in
+              ce.extract_promises("构建了四环节服务机制，设计了八个功能模块")),
+              str(ce.extract_promises("构建了四环节服务机制，设计了八个功能模块")))
+        check("ce 无数量承诺可抽", len(ce.extract_promises("构建了相关服务机制")) == 1)
+        _ce_doc = os.path.join(td, "ce.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究构建了四环节服务机制，设计并实现了含八个功能模块的系统，"
+                         "并通过检测验证了其可用性与有效性。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("随着数字技术发展，图书馆服务发生深刻变化。")
+        _d.add_paragraph("1 研究设计")
+        _d.add_paragraph("本研究以多元障碍群体为对象开展研究工作。")
+        _d.add_paragraph("5 结语")
+        _d.add_paragraph("本研究构建了相关的服务机制并完成了验证，未来可进一步拓展。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_ce_doc)
+        _rce = subprocess.run([sys.executable, os.path.join(HERE, "conclusion_echo.py"),
+                               _ce_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _ceo = _rce.stdout or ""
+        check("ce 端到端正常运行", "摘要与结语呼应核验" in _ceo, _ceo[:200])
+        check("ce 检出摘要承诺", "四环" in _ceo or "八个" in _ceo, _ceo[:400])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:

@@ -20,6 +20,8 @@
     ⑯ 引用密度分布（citation_distribution.py，结构性失引，待办级）
     ⑰ 图表与正文数字一致性（figure_data_check.py，红线级）
     ⑱ 投稿材料包完整性（submission_pack.py，官方 §8 要素，待办级）
+    ⑲ 与已见刊论文句面相合度（corpus_similarity.py，查重前哨，待办级）
+    ⑳ 摘要与结语呼应核验（conclusion_echo.py，待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -84,6 +86,8 @@ TOOLS = [
     ("⑯ 引用密度分布（结构性失引）", "citation_distribution.py", False),
     ("⑰ 图表与正文数字一致性", "figure_data_check.py", False),
     ("⑱ 投稿材料包完整性", "submission_pack.py", False),
+    ("⑲ 与已见刊论文句面相合度", "corpus_similarity.py", False),
+    ("⑳ 摘要与结语呼应核验", "conclusion_echo.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -338,6 +342,25 @@ if m and int(m.group(1)):
     todos.append(f"投稿材料包待补 {m.group(1)} 项（作者简介/联系方式/定稿日期，见 ⑱）")
 elif m:
     print("· 投稿材料包：✓ 要素齐全")
+
+# ⑲ 与已见刊论文句面相合度：高度相合 → 待办（查重前哨）
+cs_out = results.get("⑲ 与已见刊论文句面相合度", {}).get("out", "")
+m = re.search(r"🔴 高度相合 ≥[\d.]+：(\d+) 句", cs_out)
+if m and int(m.group(1)):
+    todos.append(f"与已刊论文高度相合 {m.group(1)} 句（查重前哨，见 ⑲，须改写或删除）")
+elif m:
+    print("· 句面相合度（vs 118 篇见刊）：✓ 无高度相合")
+m = re.search(r"🟡 中度相合 [\d.–]+：(\d+) 句", cs_out)
+if m and int(m.group(1)):
+    todos.append(f"与已刊论文中度相合 {m.group(1)} 句（可能计入复制比，见 ⑲，建议改写）")
+
+# ⑳ 摘要与结语呼应：数量矛盾/承诺未兑现 → 待办
+ce_out = results.get("⑳ 摘要与结语呼应核验", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项呼应问题", ce_out)
+if m and int(m.group(1)):
+    todos.append(f"摘要—结语呼应 {m.group(1)} 项（数量矛盾/承诺未兑现，见 ⑳）")
+elif m:
+    print("· 摘要—结语呼应：✓ 一致")
 
 print()
 if red_flags:

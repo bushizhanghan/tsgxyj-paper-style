@@ -30,7 +30,7 @@
 | E 模拟审稿 | 投稿前 | 13 维 × 100 分制打分卡 + 按失分排序的修改路线图（声明：特征模拟，非真实评审） |
 | F 回复审稿 | 返修阶段 | 逐条回应制 + 投稿邮件与材料模板 |
 
-> 投稿前一条命令跑完十八项（GB/T 7714 + D + 引文结构 + A + 润色体检 + E + G + 论证链对仗 + 图表三线表 + 摘要—正文数字一致性 + 术语漂移）：`python scripts/check_all.py 论文.docx`（自动汇总红线/待办与模拟审稿分数，并输出与上次总检的指标对比，退出码 0 = 无红线）。术语漂移已在总检内（待办级），数字硬伤为红线级。返修阶段另用 `python scripts/response_check.py --reviews 审稿意见.docx --response 回复信.docx` 核对「意见条数 vs 回应区块数 / 三件套 / 位置精确度」。
+> 投稿前一条命令跑完二十项（GB/T 7714 + D + 引文结构 + A + 润色体检 + E + G + 论证链对仗 + 图表三线表 + 摘要—正文数字一致性 + 术语漂移）：`python scripts/check_all.py 论文.docx`（自动汇总红线/待办与模拟审稿分数，并输出与上次总检的指标对比，退出码 0 = 无红线）。术语漂移已在总检内（待办级），数字硬伤为红线级。返修阶段另用 `python scripts/response_check.py --reviews 审稿意见.docx --response 回复信.docx` 核对「意见条数 vs 回应区块数 / 三件套 / 位置精确度」。
 
 ## 文件结构
 
@@ -67,7 +67,7 @@ scripts/
   term_consistency.py           # 术语漂移检测器（同义异形词混用，附该刊 118 篇原文偏好篇数与共现率白名单，check_all 第⑪项）
   response_check.py             # 审稿回复逐条回应核对器（模式 F：条数/三件套/位置精确度，退出码 1 = 有硬伤）
   draft_scaffold.py             # 句式脚手架生成器（五大核心章节地道骨架填空）
-  check_all.py                  # 投稿前一键总检（十八项工具串联 + 增量快照对比与刊中位可视化）
+  check_all.py                  # 投稿前一键总检（二十项工具串联 + 增量快照对比与刊中位可视化）
   fetch_reviews_direct.py       # 投稿者反馈抓取与解析（维护 submission-reality.md）
   feedback_loop.py              # 审查反哺闭环（已见刊全面吸收/用户稿只取长处）
   citation_quality.py           # 引文—论点关联核验（装饰性引用专查）
@@ -79,7 +79,9 @@ scripts/
   citation_distribution.py      # 引用密度分布（结构性失引，论证空窗）
   figure_data_check.py          # 图表与正文数字一致性（读真实表格）
   submission_pack.py            # 投稿材料包完整性（官方 §8 要素）
-  selftest.py                   # 工具链自检（396 项断言，含 xref 往返、13 维守卫、数字一致性、术语漂移与审稿回复核对，改脚本后必跑）
+  corpus_similarity.py         # 与已见刊论文句面相合度（外部查重前哨）
+  conclusion_echo.py           # 摘要与结语呼应核验（贡献承诺一致性）
+  selftest.py                   # 工具链自检（409 项断言，含 xref 往返、13 维守卫、数字一致性、术语漂移与审稿回复核对，改脚本后必跑）
   build_xref.py / unfield_refs.py / xref_verify.py   # Word 交叉引用域
 ```
 
@@ -165,7 +167,7 @@ python scripts/response_check.py --reviews 审稿意见.md --response 回复信.
 python scripts/check_all.py 论文.docx            # 退出码 0 = 无红线
 python scripts/check_all.py 论文.docx --quick    # 快速模式（只跑前两项）
 
-# 工具链自检（改 scripts/ 后必跑，396 项断言）
+# 工具链自检（改 scripts/ 后必跑，409 项断言）
 python scripts/selftest.py -v
 
 # Word 交叉引用域：编辑前退域 → 改文字 → 单次重建 → 核验
