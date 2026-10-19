@@ -352,17 +352,21 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 十五项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 十八项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联十五个工具", len(_tools_in) == 15, (_tools_in, len(_tools_in)))
+check("check_all 串联十八个工具", len(_tools_in) == 18, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
+              "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
 check("check_all ⑬⑭⑮ 接入小结",
       "稿内跨区域重复" in _ca and "英文摘要/关键词" in _ca and "标题编号体例" in _ca,
       "⑬⑭⑮ 小结未接入")
+check("check_all ⑯⑰⑱ 接入小结",
+      "结构性失引" in _ca and "图表与正文数字冲突" in _ca and "投稿材料包待补" in _ca,
+      "⑯⑰⑱ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1422,6 +1426,100 @@ if HAVE_DOCX:
         check("ha 检出断号", "断号" in _ho, _ho[:400])
         check("ha 检出末章名非结语", "结语" in _ho and "结论" in _ho, _ho[:400])
         check("ha 退出码 1", _rhd.returncode == 1, str(_rhd.returncode))
+
+        # ---- 8p. 引用密度分布（citation_distribution） ----
+        print("[8p] citation_distribution（引用分布）")
+        import citation_distribution as cd
+        check("cd 引用点解析", cd.CITE_RE.findall("见[3]与[2-5]") == ["[3]", "[2-5]"])
+        _cd_doc = os.path.join(td, "cd.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("既有研究[1]指出问题[2]，另一研究[3]亦有探讨[4]，"
+                         "还有研究[5]认为如此，另有文献[6]补充说明。")
+        _d.add_paragraph("1 系统设计")
+        for _i in range(10):
+            _d.add_paragraph("本系统在功能模块上开展设计工作，涉及界面、交互与数据三个层面的具体实现方案，"
+                             "该部分内容围绕工程实践展开，不含文献引用。")
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("本研究完成了系统设计工作并给出了实现方案。")
+        _d.add_paragraph("参考文献")
+        for _i in range(1, 7):
+            _d.add_paragraph(f"[{_i}] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_cd_doc)
+        _rcd = subprocess.run([sys.executable, os.path.join(HERE, "citation_distribution.py"),
+                               _cd_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _cdo = _rcd.stdout or ""
+        check("cd 端到端正常运行", "引用密度分布核验" in _cdo, _cdo[:200])
+        check("cd 检出结构性失引", "结构性失引" in _cdo and _rcd.returncode == 1, _cdo[:400])
+        check("cd 检出论证空窗", "论证空窗" in _cdo, _cdo[:500])
+        check("cd 输出章节级分布", "【章节级分布】" in _cdo, _cdo[:300])
+
+        # ---- 8q. 图表与正文数字一致性（figure_data_check） ----
+        print("[8q] figure_data_check（图表数据一致性）")
+        import figure_data_check as fd
+        check("fd 含表格读取", hasattr(fd, "read_tables"))
+        _fd_doc = os.path.join(td, "fd.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究共测试 698 条项目。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("本研究开展系统检测工作。")
+        _d.add_paragraph("1 结果")
+        _d.add_paragraph("功能测试项共 751 条，覆盖八个功能模块核心路径，全部通过。")
+        _d.add_paragraph("表 1　检测指标与结果汇总")
+        _t = _d.add_table(rows=2, cols=2)
+        _t.cell(0, 0).text = "指标"
+        _t.cell(0, 1).text = "数值"
+        _t.cell(1, 0).text = "功能测试项"
+        _t.cell(1, 1).text = "698 条"
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("本研究完成了检测工作。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_fd_doc)
+        _rfd = subprocess.run([sys.executable, os.path.join(HERE, "figure_data_check.py"),
+                               _fd_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _fdo = _rfd.stdout or ""
+        check("fd 端到端正常运行", "图表数据与正文数字一致性核验" in _fdo, _fdo[:200])
+        check("fd 检出表格与正文冲突", "图表与正文数字冲突" in _fdo and _rfd.returncode == 1,
+              _fdo[:500])
+        check("fd 报出双方数值", "698" in _fdo and "751" in _fdo, _fdo[:600])
+
+        # ---- 8r. 投稿材料包（submission_pack） ----
+        print("[8r] submission_pack（投稿材料包）")
+        import submission_pack as spk
+        check("spk 要素表定义", len(spk.BIO_ITEMS) >= 5 and len(spk.CONTACT_ITEMS) >= 5)
+        _pk_doc = os.path.join(td, "pk.docx")
+        _d = Document()
+        _d.add_paragraph("测试论文题名")
+        _d.add_paragraph("张　瀚")
+        _d.add_paragraph("【摘　要】本研究以某群体为对象。")
+        _d.add_paragraph("【关键词】A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("结语")
+        _d.add_paragraph("结语正文内容。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.add_paragraph("作者简介：张瀚　吉林大学副教授，硕士生导师，博士。"
+                         "研究方向：信息无障碍、智慧图书馆服务。通讯作者。")
+        _d.add_paragraph("通信地址：吉林省长春市朝阳区前进大街2699号　邮编：130012")
+        _d.add_paragraph("电话：13800000000　电子邮箱：zhanghan@jlu.edu.cn")
+        _d.add_paragraph("定稿日期：2026-10-19")
+        _d.save(_pk_doc)
+        _rpk = subprocess.run([sys.executable, os.path.join(HERE, "submission_pack.py"),
+                               _pk_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _pko = _rpk.stdout or ""
+        check("spk 端到端正常运行", "投稿材料包完整性核验" in _pko, _pko[:200])
+        check("spk 合规稿判齐全", "材料包要素齐全" in _pko and _rpk.returncode == 0,
+              _pko[:600])
+        check("spk 输出简介与联系方式要素",
+              "作者简介要素" in _pko and "联系方式要素" in _pko, _pko[:400])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:

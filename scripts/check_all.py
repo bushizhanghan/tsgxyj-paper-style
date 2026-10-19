@@ -17,6 +17,9 @@
     ⑬ 稿内自我重复（self_repeat.py，查重前哨，待办级）
     ⑭ 英文摘要与关键词对称性（english_audit.py，官方中英文对应）
     ⑮ 标题编号体例（heading_audit.py，跳级/重号/断号）
+    ⑯ 引用密度分布（citation_distribution.py，结构性失引，待办级）
+    ⑰ 图表与正文数字一致性（figure_data_check.py，红线级）
+    ⑱ 投稿材料包完整性（submission_pack.py，官方 §8 要素，待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -78,6 +81,9 @@ TOOLS = [
     ("⑬ 稿内自我重复（查重前哨）", "self_repeat.py", False),
     ("⑭ 英文摘要与关键词对称性", "english_audit.py", False),
     ("⑮ 标题编号体例", "heading_audit.py", False),
+    ("⑯ 引用密度分布（结构性失引）", "citation_distribution.py", False),
+    ("⑰ 图表与正文数字一致性", "figure_data_check.py", False),
+    ("⑱ 投稿材料包完整性", "submission_pack.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -308,6 +314,30 @@ if m and int(m.group(1)):
     todos.append(f"标题编号体例 {m.group(1)} 项（跳级/重号/断号，见 ⑮）")
 elif m:
     print("· 标题编号体例：✓ 合规")
+
+# ⑯ 引用密度分布：结构性失引 → 待办（后半缺文献支撑，审稿高频意见）
+cd_out = results.get("⑯ 引用密度分布（结构性失引）", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项结构性失引", cd_out)
+if m and int(m.group(1)):
+    todos.append(f"结构性失引 {m.group(1)} 项（引用集中在前部/论证空窗，见 ⑯）")
+elif m:
+    print("· 引用密度分布：✓ 未见结构性失引")
+
+# ⑰ 图表与正文数字一致性：冲突 → 红线（数据可信度硬伤）
+fd_out = results.get("⑰ 图表与正文数字一致性", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项图表与正文数字冲突", fd_out)
+if m and int(m.group(1)):
+    red_flags.append(f"图表与正文数字冲突 {m.group(1)} 项（见 ⑰，投稿前必须改）")
+elif m:
+    print("· 图表与正文数字：✓ 一致")
+
+# ⑱ 投稿材料包：待补要素 → 待办（实名投稿前须补齐）
+sp_out = results.get("⑱ 投稿材料包完整性", {}).get("out", "")
+m = re.search(r"🔴 材料包待补 (\d+) 项", sp_out)
+if m and int(m.group(1)):
+    todos.append(f"投稿材料包待补 {m.group(1)} 项（作者简介/联系方式/定稿日期，见 ⑱）")
+elif m:
+    print("· 投稿材料包：✓ 要素齐全")
 
 print()
 if red_flags:
