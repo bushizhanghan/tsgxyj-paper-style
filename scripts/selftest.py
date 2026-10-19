@@ -352,15 +352,16 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 二十七项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 二十九项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联二十七个工具", len(_tools_in) == 27, (_tools_in, len(_tools_in)))
+check("check_all 串联二十九个工具", len(_tools_in) == 29, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
               "corpus_similarity.py", "conclusion_echo.py", "figure_numbering.py",
               "keyword_echo.py", "paragraph_structure.py", "sentence_length.py",
               "paragraph_shape.py", "heading_shape.py", "abstract_shape.py",
+              "benwen_usage.py", "structure_scale.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -379,6 +380,8 @@ check("check_all ㉔㉕ 接入小结",
       "句长分布偏离" in _ca and "段落首尾形态" in _ca, "㉔㉕ 小结未接入")
 check("check_all ㉖㉗ 接入小结",
       "标题形态" in _ca and "摘要要素顺序" in _ca, "㉖㉗ 小结未接入")
+check("check_all ㉘㉙ 接入小结",
+      "「本文」使用率" in _ca and "篇章规模" in _ca, "㉘㉙ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1847,6 +1850,58 @@ if HAVE_DOCX:
         check("absh 端到端正常运行", "摘要要素顺序与句式核验" in _abo, _abo[:200])
         check("absh 检出官方忌词", "忌词" in _abo and _rab.returncode == 1, _abo[:400])
         check("absh 报出多个忌词", _abo.count("忌词") >= 2, _abo[:600])
+
+        # ---- 9b. 「本文」使用率（benwen_usage） ----
+        print("[9b] benwen_usage（「本文」使用率）")
+        import benwen_usage as bwu
+        check("bwu 阈值与语料分位对齐",
+              (bwu.P50, bwu.P75, bwu.P90) == (2.1, 7.3, 12.7),
+              (bwu.P50, bwu.P75, bwu.P90))
+        _bwu_doc = os.path.join(td, "bwu.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本文分析了某现象并提出了策略。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("结语正文。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_bwu_doc)
+        _rbw = subprocess.run([sys.executable, os.path.join(HERE, "benwen_usage.py"),
+                               _bwu_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _bwo = _rbw.stdout or ""
+        check("bwu 端到端正常运行", "「本文」使用率核验" in _bwo, _bwo[:200])
+        check("bwu 摘要含本文判红线", "摘要含「本文/我们」" in _bwo and _rbw.returncode == 1,
+              _bwo[:400])
+        check("bwu 输出该刊基线", "32% 篇目完全不用" in _bwo, _bwo[:300])
+
+        # ---- 9c. 篇章规模（structure_scale） ----
+        print("[9c] structure_scale（篇章规模）")
+        import structure_scale as ssc
+        check("ssc 分位常量齐全",
+              (ssc.SEC_P25, ssc.SEC_P50, ssc.PARA_P25, ssc.PARA_P50,
+               ssc.CHARS_MIN, ssc.CHARS_MAX) == (1, 4, 33, 39, 8000, 18000),
+              (ssc.SEC_P25, ssc.SEC_P50, ssc.PARA_P25, ssc.PARA_P50))
+        check("ssc 一级标题计数", ssc.count_h1(["0 引言", "1 研究设计", "1.1 对象", "5 结语"]) == 3,
+              ssc.count_h1(["0 引言", "1 研究设计", "1.1 对象", "5 结语"]))
+        _ssc_doc = os.path.join(td, "ssc.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展了系统研究并得出相关结论。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_ssc_doc)
+        _rss = subprocess.run([sys.executable, os.path.join(HERE, "structure_scale.py"),
+                               _ssc_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _sso = _rss.stdout or ""
+        check("ssc 端到端正常运行", "篇章规模核验" in _sso, _sso[:200])
+        check("ssc 检出章节过少", "结构未展开" in _sso and _rss.returncode == 1, _sso[:400])
+        check("ssc 检出字数单薄", "篇幅单薄" in _sso, _sso[:500])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:

@@ -29,6 +29,8 @@
     ㉕ 段落首尾形态与分号（paragraph_shape.py，提示级，不计待办）
     ㉖ 标题形态（heading_shape.py，虚标题/末章命名，待办级）
     ㉗ 摘要要素顺序与句式（abstract_shape.py，官方忌词红线级）
+    ㉘ 「本文」使用率（benwen_usage.py，摘要含「本文」红线级）
+    ㉙ 篇章规模（structure_scale.py，章节数/字数，待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -102,6 +104,8 @@ TOOLS = [
     ("㉕ 段落首尾形态与分号", "paragraph_shape.py", False),
     ("㉖ 标题形态", "heading_shape.py", False),
     ("㉗ 摘要要素顺序与句式", "abstract_shape.py", False),
+    ("㉘ 「本文」使用率", "benwen_usage.py", False),
+    ("㉙ 篇章规模", "structure_scale.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -444,6 +448,25 @@ if m and int(m.group(1)):
         todos.append(f"摘要形态 {m.group(1)} 项（见 ㉗）")
 elif m:
     print("· 摘要要素顺序与句式：✓ 合规")
+
+# ㉘ 「本文」使用率：摘要含「本文」→ 红线（官方明文）；密度超 P75 → 待办
+bw_out = results.get("㉘ 「本文」使用率", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项问题", bw_out)
+if m and int(m.group(1)):
+    if "摘要含「本文/我们」" in bw_out:
+        red_flags.append("摘要含「本文/我们」（官方须知明文禁止，见 ㉘）")
+    else:
+        todos.append(f"「本文」密度超该刊 P90（见 ㉘）")
+elif m:
+    print("· 「本文」使用率：✓ 符合官方与刊内密度")
+
+# ㉙ 篇章规模：章节过少/字数越界 → 待办
+ss_out = results.get("㉙ 篇章规模", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项规模问题", ss_out)
+if m and int(m.group(1)):
+    todos.append(f"篇章规模偏离（章节数/字数，见 ㉙）")
+elif m:
+    print("· 篇章规模：✓ 在常规区间")
 
 print()
 if red_flags:
