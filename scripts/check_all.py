@@ -25,6 +25,8 @@
     ㉑ 图表编号连续性（figure_numbering.py，断号/重号/悬空指路，待办级）
     ㉒ 关键词内容呼应（keyword_echo.py，装饰性关键词专查，待办级）
     ㉓ 段内结构范式（paragraph_structure.py，提示级，不计待办）
+    ㉔ 句长分布（sentence_length.py，碎句化/臃肿句，待办级）
+    ㉕ 段落首尾形态与分号（paragraph_shape.py，提示级，不计待办）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -94,6 +96,8 @@ TOOLS = [
     ("㉑ 图表编号连续性", "figure_numbering.py", False),
     ("㉒ 关键词内容呼应", "keyword_echo.py", False),
     ("㉓ 段内结构范式", "paragraph_structure.py", False),
+    ("㉔ 句长分布", "sentence_length.py", False),
+    ("㉕ 段落首尾形态与分号", "paragraph_shape.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -394,6 +398,28 @@ if m:
               f"主题分散 {m.group(3)}/分句过长 {m.group(4)}，见 ㉓）")
     else:
         print("· 段内结构范式：✓ 无违反")
+
+# ㉔ 句长分布：短句/长句率超限 → 待办（碎句化是显性文风问题）
+sl_out = results.get("㉔ 句长分布", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项分布问题", sl_out)
+if m and int(m.group(1)):
+    _m2 = re.search(r"短句率（<30字）([\d.]+)%", sl_out)
+    _m3 = re.search(r"长句率（>120字）([\d.]+)%", sl_out)
+    _detail = f"短句 {_m2.group(1)}%/长句 {_m3.group(1)}%" if (_m2 and _m3) else ""
+    todos.append(f"句长分布偏离（{_detail}，见 ㉔）")
+elif m:
+    print("· 句长分布：✓ 在刊容差内")
+
+# ㉕ 段落首尾形态：提示级，只汇总不进待办
+ph_out = results.get("㉕ 段落首尾形态与分号", {}).get("out", "")
+m = re.search(r"合计：连接词起句 (\d+) ｜ 段末套话 (\d+) ｜ 并列零分号 (\d+)", ph_out)
+if m:
+    _n = sum(int(x) for x in m.groups())
+    if _n:
+        print(f"· 段落首尾形态：{_n} 处提示级（连接词起句 {m.group(1)}/"
+              f"段末套话 {m.group(2)}/并列零分号 {m.group(3)}，见 ㉕）")
+    else:
+        print("· 段落首尾形态：✓ 无偏离")
 
 print()
 if red_flags:

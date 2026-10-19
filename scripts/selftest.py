@@ -352,14 +352,15 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 二十三项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 二十五项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联二十三个工具", len(_tools_in) == 23, (_tools_in, len(_tools_in)))
+check("check_all 串联二十五个工具", len(_tools_in) == 25, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
               "corpus_similarity.py", "conclusion_echo.py", "figure_numbering.py",
-              "keyword_echo.py", "paragraph_structure.py",
+              "keyword_echo.py", "paragraph_structure.py", "sentence_length.py",
+              "paragraph_shape.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -374,6 +375,8 @@ check("check_all ⑲⑳ 接入小结",
 check("check_all ㉑㉒㉓ 接入小结",
       "图表编号问题" in _ca and "关键词问题" in _ca and "段内结构范式" in _ca,
       "㉑㉒㉓ 小结未接入")
+check("check_all ㉔㉕ 接入小结",
+      "句长分布偏离" in _ca and "段落首尾形态" in _ca, "㉔㉕ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1723,6 +1726,71 @@ if HAVE_DOCX:
         check("psg 检出连接词起句", "连接词起句" in _psgo and "然而" in _psgo, _psgo[:400])
         check("psg 检出一段多主题", "一段多主题" in _psgo and "ordinal" in _psgo, _psgo[:500])
         check("psg 提示级退出码 0", _rpsg.returncode == 0, str(_rpsg.returncode))
+
+        # ---- 8x. 句长分布（sentence_length） ----
+        print("[8x] sentence_length（句长分布）")
+        import sentence_length as sl
+        check("sl 阈值与语料分位对齐",
+              (sl.SHORT_MAX, sl.SHORT_RATE_LIMIT, sl.LONG_MIN,
+               sl.LONG_RATE_LIMIT, sl.MAIN_RATE_LIMIT) ==
+              (30, 0.45, 120, 0.12, 0.30),
+              (sl.SHORT_MAX, sl.SHORT_RATE_LIMIT, sl.LONG_MIN,
+               sl.LONG_RATE_LIMIT, sl.MAIN_RATE_LIMIT))
+        # 碎句化稿 → 应报问题
+        _sl_doc = os.path.join(td, "sl.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展相关研究工作并得出结论。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("随着技术发展。服务在变。用户在增。需求在变。"
+                         "既有研究不足。尚缺探讨。本研究旨在填补缺口。")
+        _d.add_paragraph("1 研究设计")
+        _d.add_paragraph("本研究以某群体为对象，采用问卷与测试相结合的方法开展研究工作，"
+                         "样本覆盖多家机构并具有代表性。")
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("本研究完成了相关研究工作，取得预期成果。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_sl_doc)
+        _rsl = subprocess.run([sys.executable, os.path.join(HERE, "sentence_length.py"),
+                               _sl_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _slo = _rsl.stdout or ""
+        check("sl 端到端正常运行", "句长分布核验" in _slo, _slo[:200])
+        check("sl 检出碎句化", "短句率" in _slo and _rsl.returncode == 1, _slo[:400])
+        check("sl 输出该刊基线", "该刊基线" in _slo, _slo[:300])
+
+        # ---- 8y. 段落首尾形态（paragraph_shape） ----
+        print("[8y] paragraph_shape（段落首尾形态）")
+        import paragraph_shape as psh
+        check("psh 连接词起句识别", bool(psh.CONN_HEAD.search("然而，既有研究不足")))
+        check("psh 段末套话识别", bool(psh.CLICHE_TAIL.search("本研究具有重要意义。")))
+        check("psh 并列标记识别", len(psh.PARALLEL_MARK.findall("一是甲。二是乙。三是丙。")) == 3)
+        _psh_doc = os.path.join(td, "psh.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展相关研究工作并得出结论。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("然而，既有研究在多个维度上仍存在明显不足，需要进一步深入探讨，"
+                         "相关理论与实践均有待完善，本研究旨在填补这一研究缺口。")
+        _d.add_paragraph("1 结果")
+        _d.add_paragraph("第一类是信息获取与阅读，对应检索功能模块。"
+                         "第二类是个性化适配，对应适配档案生成机制。"
+                         "第三类是交互与帮扶，对应人工保障与问答助手。")
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("本研究完成了相关研究工作，取得预期成果，具有重要意义。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_psh_doc)
+        _rpsh = subprocess.run([sys.executable, os.path.join(HERE, "paragraph_shape.py"),
+                                _psh_doc], capture_output=True, encoding="utf-8",
+                               errors="replace")
+        _psho = _rpsh.stdout or ""
+        check("psh 端到端正常运行", "段落首尾形态与分号使用核验" in _psho, _psho[:200])
+        check("psh 检出连接词起句", "连接词起句" in _psho and "然而" in _psho, _psho[:400])
+        check("psh 检出段末套话", "段末套话" in _psho, _psho[:500])
+        check("psh 检出并列零分号", "并列零分号" in _psho, _psho[:500])
+        check("psh 提示级退出码 0", _rpsh.returncode == 0, str(_rpsh.returncode))
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:
