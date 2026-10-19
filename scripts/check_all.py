@@ -42,6 +42,8 @@
     ㊲ 「即」解释句式密度（ji_density.py，提示级）
     ㊳ 程度词比率（hedge_ratio.py，强断言>75% 待办级）
     ㊴ 摘要—关键词关联（abstract_keyword_link.py，过半关键词未在摘要出现待办级）
+    ㊵ 前置元数据序列（front_matter.py，官方 §4 序列，待办级）
+    ㊶ 英文题名核验（en_title_check.py，缺失待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -128,6 +130,8 @@ TOOLS = [
     ("㊲ 「即」解释句式密度", "ji_density.py", False),
     ("㊳ 程度词比率", "hedge_ratio.py", False),
     ("㊴ 摘要—关键词关联", "abstract_keyword_link.py", False),
+    ("㊵ 前置元数据序列", "front_matter.py", False),
+    ("㊶ 英文题名核验", "en_title_check.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -589,6 +593,24 @@ if m and int(m.group(1)):
                  if _m2 else "摘要—关键词脱节（见 ㊴）")
 elif m:
     print("· 摘要—关键词关联：✓ 良好")
+
+# ㊵ 前置元数据序列：缺英文题名/顺序错 → 待办（官方 §4 序列）
+fm_out = results.get("㊵ 前置元数据序列", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项序列问题", fm_out)
+if m and int(m.group(1)):
+    todos.append(f"前置元数据序列 {m.group(1)} 项（官方 §4 要求，见 ㊵）")
+elif m:
+    print("· 前置元数据序列：✓ 符合官方序列")
+
+# ㊶ 英文题名：缺失 → 待办；形态问题 → 提示
+et_out = results.get("㊶ 英文题名核验", {}).get("out", "")
+if "未见英文题名" in et_out:
+    todos.append("缺英文题名（官方 §4 序列要求，见 ㊶）")
+elif "🔴" in et_out:
+    _m2 = re.search(r"🔴 发现 (\d+) 项", et_out)
+    todos.append(f"英文题名形态 {_m2.group(1) if _m2 else ''} 项（见 ㊶）")
+elif et_out:
+    print("· 英文题名：✓ 合规")
 
 print()
 if red_flags:

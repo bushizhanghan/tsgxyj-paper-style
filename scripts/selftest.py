@@ -352,9 +352,9 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 四十项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 四十二项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联四十个工具", len(_tools_in) == 40, (_tools_in, len(_tools_in)))
+check("check_all 串联四十二个工具", len(_tools_in) == 42, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
@@ -365,7 +365,7 @@ for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.
               "ref_year_check.py", "ref_type_check.py", "ref_dup_check.py",
               "chapter_balance.py", "intro_scale.py", "heading_naming.py",
               "le_density.py", "ji_density.py", "hedge_ratio.py",
-              "abstract_keyword_link.py",
+              "abstract_keyword_link.py", "front_matter.py", "en_title_check.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -399,6 +399,8 @@ check("check_all ㊱㊲㊳ 接入小结",
       "㊱㊲㊳ 小结未接入")
 check("check_all ㊴ 接入小结",
       "摘要—关键词脱节" in _ca, "㊴ 小结未接入")
+check("check_all ㊵㊶ 接入小结",
+      "前置元数据序列" in _ca and "英文题名" in _ca, "㊵㊶ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -2247,6 +2249,64 @@ if HAVE_DOCX:
         check("akl 检出脱节", "关键词与摘要脱节" in _ako and _rak.returncode == 1,
               _ako[:400])
         check("akl 输出逐词命中", "✓" in _ako and "✗" in _ako, _ako[:500])
+
+        # ---- 9o. 前置元数据序列（front_matter） ----
+        print("[9o] front_matter（前置元数据序列）")
+        import front_matter as fmo
+        check("fmo 官方序列常量齐全", hasattr(fmo, "OFFICIAL_ORDER")
+              or hasattr(fmo, "SEQ"), [a for a in dir(fmo) if a.isupper()][:8])
+        _fmo_doc = os.path.join(td, "fmo.docx")
+        _d = Document()
+        _d.add_paragraph("面向多元障碍群体的智能帮扶研究")
+        _d.add_paragraph("——基于小程序系统的设计与验证")
+        _d.add_paragraph("张　瀚")
+        _d.add_paragraph("Intelligent Assistance for People with Diverse Disabilities")
+        _d.add_paragraph("ZHANG Han")
+        _d.add_paragraph("【摘　要】本研究以多元障碍群体为对象，构建智能帮扶机制并验证其可用性。")
+        _d.add_paragraph("【关键词】多元障碍群体；智能帮扶；微信小程序")
+        _d.add_paragraph("Abstract: This study builds an intelligent assistance mechanism "
+                         "for people with diverse disabilities and validates its usability.")
+        _d.add_paragraph("Key words: diverse disabilities; intelligent assistance")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_fmo_doc)
+        _rfm = subprocess.run([sys.executable, os.path.join(HERE, "front_matter.py"),
+                               _fmo_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _fmo_o = _rfm.stdout or ""
+        check("fmo 端到端正常运行", "前置元数据序列核验" in _fmo_o, _fmo_o[:200])
+        check("fmo 输出官方序列实测", "官方序列实测" in _fmo_o, _fmo_o[:300])
+        check("fmo 完整序列判通过", "✓" in _fmo_o and _rfm.returncode == 0,
+              _fmo_o[-400:])
+
+        # ---- 9p. 英文题名核验（en_title_check） ----
+        print("[9p] en_title_check（英文题名）")
+        import en_title_check as etc
+        _etc_doc = os.path.join(td, "etc.docx")
+        _d = Document()
+        _d.add_paragraph("面向多元障碍群体的智能帮扶研究")
+        _d.add_paragraph("张　瀚")
+        _d.add_paragraph("Intelligent Assistance Services for People with Diverse "
+                         "Disabilities in Libraries")
+        _d.add_paragraph("【摘　要】本研究以多元障碍群体为对象，构建智能帮扶机制并验证其可用性。")
+        _d.add_paragraph("【关键词】多元障碍群体；智能帮扶")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_etc_doc)
+        _ret = subprocess.run([sys.executable, os.path.join(HERE, "en_title_check.py"),
+                               _etc_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _eto = _ret.stdout or ""
+        check("etc 端到端正常运行", "英文题名核验" in _eto, _eto[:200])
+        check("etc 检出英文题名", "Intelligent Assistance" in _eto, _eto[:300])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:
