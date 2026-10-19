@@ -352,14 +352,14 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 二十二项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 二十三项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联二十二个工具", len(_tools_in) == 22, (_tools_in, len(_tools_in)))
+check("check_all 串联二十三个工具", len(_tools_in) == 23, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
               "corpus_similarity.py", "conclusion_echo.py", "figure_numbering.py",
-              "keyword_echo.py",
+              "keyword_echo.py", "paragraph_structure.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -371,8 +371,9 @@ check("check_all ⑯⑰⑱ 接入小结",
       "⑯⑰⑱ 小结未接入")
 check("check_all ⑲⑳ 接入小结",
       "高度相合" in _ca and "摘要—结语呼应" in _ca, "⑲⑳ 小结未接入")
-check("check_all ㉑㉒ 接入小结",
-      "图表编号问题" in _ca and "关键词问题" in _ca, "㉑㉒ 小结未接入")
+check("check_all ㉑㉒㉓ 接入小结",
+      "图表编号问题" in _ca and "关键词问题" in _ca and "段内结构范式" in _ca,
+      "㉑㉒㉓ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1677,6 +1678,51 @@ if HAVE_DOCX:
         check("ke 检出装饰性关键词", "装饰性关键词" in _keo and _rke.returncode == 1,
               _keo[:500])
         check("ke 输出覆盖度表", "关键词覆盖度" in _keo, _keo[:400])
+
+        # ---- 8w. 段内结构范式（paragraph_structure） ----
+        print("[8w] paragraph_structure（段内结构范式）")
+        import paragraph_structure as psg
+        check("psg 连接词起句识别", bool(psg.CONN_HEAD.search("然而，既有研究存在不足")))
+        check("psg 直接陈述不误判", not psg.CONN_HEAD.search("《无障碍环境建设法》于2023年施行"))
+        check("psg 套话收尾识别", bool(psg.CLICHE_TAIL.search("本文具有重要意义。")))
+        check("psg 阈值已校准", psg.LONG_CLAUSE == 95, psg.LONG_CLAUSE)
+        # 切句
+        check("psg 切句", len(psg.split_sents("第一句。第二句！第三句？")) == 3)
+        # 一段多主题：确定性规则（aspect 标记 / 并列小标题）
+        _sigs = psg.multi_topic_signals(
+            ["第一类是信息获取与阅读。", "第二类是个性化适配。", "第三类是交互与帮扶。"])
+        check("psg 检出多小标题段", any(k == "ordinal" for k, _ in _sigs), str(_sigs))
+        _sigs2 = psg.multi_topic_signals(
+            ["在服务方面，本系统做了调整。", "在资源方面，相关配置有所优化。"])
+        check("psg 单方面标记不误判", not _sigs2, str(_sigs2))
+        _sigs3 = psg.multi_topic_signals(["本研究以某群体为对象开展了系统研究工作。"])
+        check("psg 单句无信号", not _sigs3, str(_sigs3))
+        # 合成稿：连接词起句 + 主题分散段
+        _psg_doc = os.path.join(td, "psg.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("然而，既有研究在多个维度上仍存在明显不足，需要进一步深入探讨，"
+                         "相关理论与实践均有待完善，本研究旨在填补这一研究缺口。")
+        _d.add_paragraph("1 研究设计")
+        _d.add_paragraph("第一类是信息获取与阅读，对应检索功能模块。"
+                         "第二类是个性化适配，对应适配档案生成机制。"
+                         "第三类是交互与帮扶，对应人工保障与问答助手。"
+                         "第四类是场景化支持，对应到馆与线上两类场景。")
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("本研究完成了相关研究工作。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_psg_doc)
+        _rpsg = subprocess.run([sys.executable, os.path.join(HERE, "paragraph_structure.py"),
+                                _psg_doc], capture_output=True, encoding="utf-8",
+                               errors="replace")
+        _psgo = _rpsg.stdout or ""
+        check("psg 端到端正常运行", "段内结构范式核验" in _psgo, _psgo[:200])
+        check("psg 检出连接词起句", "连接词起句" in _psgo and "然而" in _psgo, _psgo[:400])
+        check("psg 检出一段多主题", "一段多主题" in _psgo and "ordinal" in _psgo, _psgo[:500])
+        check("psg 提示级退出码 0", _rpsg.returncode == 0, str(_rpsg.returncode))
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:

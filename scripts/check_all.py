@@ -24,6 +24,7 @@
     ⑳ 摘要与结语呼应核验（conclusion_echo.py，待办级）
     ㉑ 图表编号连续性（figure_numbering.py，断号/重号/悬空指路，待办级）
     ㉒ 关键词内容呼应（keyword_echo.py，装饰性关键词专查，待办级）
+    ㉓ 段内结构范式（paragraph_structure.py，提示级，不计待办）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -92,6 +93,7 @@ TOOLS = [
     ("⑳ 摘要与结语呼应核验", "conclusion_echo.py", False),
     ("㉑ 图表编号连续性", "figure_numbering.py", False),
     ("㉒ 关键词内容呼应", "keyword_echo.py", False),
+    ("㉓ 段内结构范式", "paragraph_structure.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -381,6 +383,17 @@ if m and int(m.group(1)):
     todos.append(f"关键词问题 {m.group(1)} 项（装饰性关键词/个数不符，见 ㉒）")
 elif m:
     print("· 关键词内容呼应：✓ 无装饰性问题")
+
+# ㉓ 段内结构范式：提示级，只汇总不进待办（避免风格建议淹没硬问题）
+ps_out = results.get("㉓ 段内结构范式", {}).get("out", "")
+m = re.search(r"合计：连接词起句 (\d+) ｜ 套话收尾 (\d+) ｜ 主题分散 (\d+) ｜ 分句过长 (\d+)", ps_out)
+if m:
+    _n = sum(int(x) for x in m.groups())
+    if _n:
+        print(f"· 段内结构范式：{_n} 处提示级（连接词起句 {m.group(1)}/"
+              f"主题分散 {m.group(3)}/分句过长 {m.group(4)}，见 ㉓）")
+    else:
+        print("· 段内结构范式：✓ 无违反")
 
 print()
 if red_flags:
