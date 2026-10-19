@@ -27,6 +27,8 @@
     ㉓ 段内结构范式（paragraph_structure.py，提示级，不计待办）
     ㉔ 句长分布（sentence_length.py，碎句化/臃肿句，待办级）
     ㉕ 段落首尾形态与分号（paragraph_shape.py，提示级，不计待办）
+    ㉖ 标题形态（heading_shape.py，虚标题/末章命名，待办级）
+    ㉗ 摘要要素顺序与句式（abstract_shape.py，官方忌词红线级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -98,6 +100,8 @@ TOOLS = [
     ("㉓ 段内结构范式", "paragraph_structure.py", False),
     ("㉔ 句长分布", "sentence_length.py", False),
     ("㉕ 段落首尾形态与分号", "paragraph_shape.py", False),
+    ("㉖ 标题形态", "heading_shape.py", False),
+    ("㉗ 摘要要素顺序与句式", "abstract_shape.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -420,6 +424,26 @@ if m:
               f"段末套话 {m.group(2)}/并列零分号 {m.group(3)}，见 ㉕）")
     else:
         print("· 段落首尾形态：✓ 无偏离")
+
+# ㉖ 标题形态：虚标题/末章命名 → 待办
+hs_out = results.get("㉖ 标题形态", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项标题问题", hs_out)
+if m and int(m.group(1)):
+    todos.append(f"标题形态 {m.group(1)} 项（虚标题/末章命名，见 ㉖）")
+elif m:
+    print("· 标题形态：✓ 无虚标题、末章合规")
+
+# ㉗ 摘要要素顺序与句式：官方忌词 → 红线；乱序/首句形态 → 提示
+as_out = results.get("㉗ 摘要要素顺序与句式", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项摘要问题", as_out)
+if m and int(m.group(1)):
+    # 官方忌词属红线级
+    if "忌词" in as_out:
+        red_flags.append(f"摘要含官方忌词（见 ㉗，须知明文禁止）")
+    else:
+        todos.append(f"摘要形态 {m.group(1)} 项（见 ㉗）")
+elif m:
+    print("· 摘要要素顺序与句式：✓ 合规")
 
 print()
 if red_flags:

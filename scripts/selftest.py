@@ -352,15 +352,15 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 二十五项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 二十七项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联二十五个工具", len(_tools_in) == 25, (_tools_in, len(_tools_in)))
+check("check_all 串联二十七个工具", len(_tools_in) == 27, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
               "corpus_similarity.py", "conclusion_echo.py", "figure_numbering.py",
               "keyword_echo.py", "paragraph_structure.py", "sentence_length.py",
-              "paragraph_shape.py",
+              "paragraph_shape.py", "heading_shape.py", "abstract_shape.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -377,6 +377,8 @@ check("check_all ㉑㉒㉓ 接入小结",
       "㉑㉒㉓ 小结未接入")
 check("check_all ㉔㉕ 接入小结",
       "句长分布偏离" in _ca and "段落首尾形态" in _ca, "㉔㉕ 小结未接入")
+check("check_all ㉖㉗ 接入小结",
+      "标题形态" in _ca and "摘要要素顺序" in _ca, "㉖㉗ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1791,6 +1793,60 @@ if HAVE_DOCX:
         check("psh 检出段末套话", "段末套话" in _psho, _psho[:500])
         check("psh 检出并列零分号", "并列零分号" in _psho, _psho[:500])
         check("psh 提示级退出码 0", _rpsh.returncode == 0, str(_rpsh.returncode))
+
+        # ---- 8z. 标题形态（heading_shape） ----
+        print("[8z] heading_shape（标题形态）")
+        import heading_shape as hsh
+        check("hsh 虚标题识别", bool(hsh.VAGUE_TITLE.match("若干思考")))
+        check("hsh 带对象标题不误判", not hsh.VAGUE_TITLE.match("视障用户数字阅读服务研究"))
+        check("hsh 末章命名识别",
+              bool(hsh.CLOSING_BAD.search("5 结论")) and bool(hsh.CLOSING_OK.search("5 结语")))
+        check("hsh 专用短标题豁免", "结语" in hsh.SHORT_OK and "引言" in hsh.SHORT_OK)
+        _hsh_doc = os.path.join(td, "hsh.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("1 若干思考")
+        _d.add_paragraph("正文内容。")
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("结语正文。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_hsh_doc)
+        _rhsh = subprocess.run([sys.executable, os.path.join(HERE, "heading_shape.py"),
+                                _hsh_doc], capture_output=True, encoding="utf-8",
+                               errors="replace")
+        _hsho = _rhsh.stdout or ""
+        check("hsh 端到端正常运行", "标题形态核验" in _hsho, _hsho[:200])
+        check("hsh 检出虚标题", "虚标题" in _hsho and _rhsh.returncode == 1, _hsho[:400])
+
+        # ---- 9a. 摘要要素顺序（abstract_shape） ----
+        print("[9a] abstract_shape（摘要要素顺序）")
+        import abstract_shape as absh
+        check("absh 忌词清单齐全",
+              all(w in absh.BAN_WORDS for w in ("分析了", "总结了", "提出了", "解决了", "本文")),
+              absh.BAN_WORDS)
+        _absh_doc = os.path.join(td, "absh.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究分析了某现象，总结了若干规律，提出了对应策略，"
+                         "解决了关键问题，本文认为具有重要价值。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("结语正文。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_absh_doc)
+        _rab = subprocess.run([sys.executable, os.path.join(HERE, "abstract_shape.py"),
+                               _absh_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _abo = _rab.stdout or ""
+        check("absh 端到端正常运行", "摘要要素顺序与句式核验" in _abo, _abo[:200])
+        check("absh 检出官方忌词", "忌词" in _abo and _rab.returncode == 1, _abo[:400])
+        check("absh 报出多个忌词", _abo.count("忌词") >= 2, _abo[:600])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:
