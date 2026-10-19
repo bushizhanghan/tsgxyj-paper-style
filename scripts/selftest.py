@@ -352,13 +352,14 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 二十项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 二十二项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联二十个工具", len(_tools_in) == 20, (_tools_in, len(_tools_in)))
+check("check_all 串联二十二个工具", len(_tools_in) == 22, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
-              "corpus_similarity.py", "conclusion_echo.py",
+              "corpus_similarity.py", "conclusion_echo.py", "figure_numbering.py",
+              "keyword_echo.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -370,6 +371,8 @@ check("check_all ⑯⑰⑱ 接入小结",
       "⑯⑰⑱ 小结未接入")
 check("check_all ⑲⑳ 接入小结",
       "高度相合" in _ca and "摘要—结语呼应" in _ca, "⑲⑳ 小结未接入")
+check("check_all ㉑㉒ 接入小结",
+      "图表编号问题" in _ca and "关键词问题" in _ca, "㉑㉒ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1616,6 +1619,64 @@ if HAVE_DOCX:
         _ceo = _rce.stdout or ""
         check("ce 端到端正常运行", "摘要与结语呼应核验" in _ceo, _ceo[:200])
         check("ce 检出摘要承诺", "四环" in _ceo or "八个" in _ceo, _ceo[:400])
+
+        # ---- 8u. 图表编号连续性（figure_numbering） ----
+        print("[8u] figure_numbering（图表编号）")
+        import figure_numbering as fgn
+        check("fgn 图题正则", bool(fgn.CAP_HEAD.match("图 1　系统架构图")))
+        check("fgn 占位图题正则", fgn.CAP_PLACEHOLDER.search("【图位：模型图（图 3）】") is not None)
+        _fgn_doc = os.path.join(td, "fgn.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("相关结果见表 1，系统结构如图 3 所示。")
+        _d.add_paragraph("1 结果")
+        _d.add_paragraph("图 2　系统架构图")
+        _d.add_paragraph("图 2　功能结构图")          # 重号
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("本研究完成了研究工作。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_fgn_doc)
+        _rfgn = subprocess.run([sys.executable, os.path.join(HERE, "figure_numbering.py"),
+                                _fgn_doc], capture_output=True, encoding="utf-8",
+                               errors="replace")
+        _fgno = _rfgn.stdout or ""
+        check("fgn 端到端正常运行", "图表编号连续性与指路句核验" in _fgno, _fgno[:200])
+        check("fgn 检出重号", "编号重复" in _fgno, _fgno[:400])
+        check("fgn 检出断号", "断号" in _fgno, _fgno[:400])
+        check("fgn 检出悬空指路", "悬空指路" in _fgno, _fgno[:400])
+        check("fgn 退出码 1", _rfgn.returncode == 1, str(_rfgn.returncode))
+
+        # ---- 8v. 关键词内容呼应（keyword_echo） ----
+        print("[8v] keyword_echo（关键词呼应）")
+        import keyword_echo as ke
+        check("ke 关键词切分", len(ke.split_kws("【关键词】A；B；C")) == 3)
+        check("ke 剥离标签", ke.split_kws("关键词：信息无障碍；智慧图书馆")[0] == "信息无障碍")
+        _ke_doc = os.path.join(td, "ke.docx")
+        _d = Document()
+        _d.add_paragraph("面向多元障碍群体的智能帮扶研究")
+        _d.add_paragraph("张　瀚")
+        _d.add_paragraph("【摘　要】本研究以多元障碍群体为对象，构建智能帮扶机制。")
+        _d.add_paragraph("【关键词】多元障碍群体；智能帮扶；信息服务")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("多元障碍群体的智能帮扶需求日益受到关注，相关研究逐步展开。")
+        _d.add_paragraph("1 研究设计")
+        _d.add_paragraph("本研究以多元障碍群体为对象开展智能帮扶机制研究。")
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("本研究完成了智能帮扶机制构建工作。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_ke_doc)
+        _rke = subprocess.run([sys.executable, os.path.join(HERE, "keyword_echo.py"),
+                               _ke_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _keo = _rke.stdout or ""
+        check("ke 端到端正常运行", "关键词与论文内容呼应核验" in _keo, _keo[:200])
+        check("ke 检出装饰性关键词", "装饰性关键词" in _keo and _rke.returncode == 1,
+              _keo[:500])
+        check("ke 输出覆盖度表", "关键词覆盖度" in _keo, _keo[:400])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:
