@@ -14,6 +14,9 @@
     ⑩ 摘要—正文数字一致性（number_consistency.py，红线级）
     ⑪ 术语漂移检测（term_consistency.py，同义异形词混用，待办级）
     ⑫ 引文—论点关联（citation_quality.py，装饰性引用，待办级）
+    ⑬ 稿内自我重复（self_repeat.py，查重前哨，待办级）
+    ⑭ 英文摘要与关键词对称性（english_audit.py，官方中英文对应）
+    ⑮ 标题编号体例（heading_audit.py，跳级/重号/断号）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -72,6 +75,9 @@ TOOLS = [
     ("⑩ 摘要—正文数字一致性", "number_consistency.py", False),
     ("⑪ 术语漂移检测（同义异形词混用）", "term_consistency.py", False),
     ("⑫ 引文—论点关联（装饰性引用）", "citation_quality.py", False),
+    ("⑬ 稿内自我重复（查重前哨）", "self_repeat.py", False),
+    ("⑭ 英文摘要与关键词对称性", "english_audit.py", False),
+    ("⑮ 标题编号体例", "heading_audit.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -272,6 +278,36 @@ if m:
         print("· 引文—论点关联（装饰性引用）：✓ 无疑似")
 elif results.get("⑫ 引文—论点关联（装饰性引用）", {}).get("rc") == 1:
     todos.append("引文—论点关联待核（见 ⑫，计数解析失败）")
+
+# ⑬ 稿内自我重复：跨区域重复 → 待办（查重率主因）；同区域内也提示
+sr_out = results.get("⑬ 稿内自我重复（查重前哨）", {}).get("out", "")
+m = re.search(r"🔴 跨区域 (\d+) 对\s*｜\s*🟡 同区域内 (\d+) 对", sr_out)
+if m:
+    _cross_n, _inner_n = int(m.group(1)), int(m.group(2))
+    if _cross_n:
+        todos.append(f"稿内跨区域重复 {_cross_n} 对（查重率主因，见 ⑬，须改写其中一处）")
+    if _inner_n:
+        todos.append(f"稿内同区域重复 {_inner_n} 对（套话复述，见 ⑬，建议合并）")
+    if not _cross_n and not _inner_n and "未检出" in sr_out:
+        print("· 稿内自我重复：✓ 未检出")
+elif results.get("⑬ 稿内自我重复（查重前哨）", {}).get("rc") == 1:
+    todos.append("稿内自我重复待核（见 ⑬，计数解析失败）")
+
+# ⑭ 英文摘要与关键词：缺失/个数不一致 → 待办（官方格式明文）
+en_out = results.get("⑭ 英文摘要与关键词对称性", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项需修改", en_out)
+if m and int(m.group(1)):
+    todos.append(f"英文摘要/关键词 {m.group(1)} 项问题（官方中英文对应要求，见 ⑭）")
+elif m:
+    print("· 英文摘要与关键词：✓ 对称性无问题")
+
+# ⑮ 标题编号体例：跳级/重号/断号 → 待办（初审常见退回）
+hd_out = results.get("⑮ 标题编号体例", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项编号体例问题", hd_out)
+if m and int(m.group(1)):
+    todos.append(f"标题编号体例 {m.group(1)} 项（跳级/重号/断号，见 ⑮）")
+elif m:
+    print("· 标题编号体例：✓ 合规")
 
 print()
 if red_flags:

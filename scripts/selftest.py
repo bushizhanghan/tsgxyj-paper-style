@@ -352,13 +352,17 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 十二项工具串联完整性（⑩⑪⑫ 等新增项不得从 TOOLS 表脱落）
+# 十五项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联十二个工具", len(_tools_in) == 12, (_tools_in, len(_tools_in)))
+check("check_all 串联十五个工具", len(_tools_in) == 15, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
+              "self_repeat.py", "english_audit.py", "heading_audit.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
+check("check_all ⑬⑭⑮ 接入小结",
+      "稿内跨区域重复" in _ca and "英文摘要/关键词" in _ca and "标题编号体例" in _ca,
+      "⑬⑭⑮ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1322,6 +1326,102 @@ if HAVE_DOCX:
         check("rt 疑问句判疑问", not _qbad, _qbad)
         # 纯表扬不误判
         check("rt 纯表扬判表扬", rt.classify("论文选题有价值，结构完整，同意发表")[0] == rt.CAT_PRAISE)
+
+        # ---- 8m. 稿内自我重复（self_repeat） ----
+        print("[8m] self_repeat（稿内自我重复）")
+        import self_repeat as sr
+        check("sr shingle 生成", len(sr.shingles("这是一句测试文本")) > 0)
+        check("sr 相同文本 jaccard=1", sr.jaccard(sr.shingles("完全相同的测试句子内容"),
+                                                  sr.shingles("完全相同的测试句子内容")) == 1.0)
+        check("sr 无关文本 jaccard 低", sr.jaccard(sr.shingles("今天天气很好"),
+                                                    sr.shingles("图书馆学理论研究")) < 0.2)
+        check("sr 归一化去引用点", "[1]" not in sr.normalize("本研究指出[1]该问题"))
+        check("sr 枚举模板识别", bool(sr.ENUM_TEMPLATE_RE.match("（4）某模型，20 道题全部通过")))
+        # 合成重复稿：摘要/结果/结语同文 → 应检出跨区域重复
+        _sr_doc = os.path.join(td, "sr.docx")
+        _d = Document()
+        _same = ("本研究构建了多元障碍群体的智能帮扶机制，设计并实现含八个功能模块的小程序系统，"
+                 "通过符合性检测与自动化测试验证了系统的可用性，为图书馆无障碍服务提供参考。")
+        _d.add_paragraph("摘要：" + _same)
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("随着数字技术快速发展，图书馆无障碍服务面临新的挑战与机遇。")
+        _d.add_paragraph("1 研究设计")
+        _d.add_paragraph("本研究以多元障碍群体为研究对象，采用混合方法系统开展相关研究工作。")
+        _d.add_paragraph("2 结果分析")
+        _d.add_paragraph(_same)
+        _d.add_paragraph("3 结语")
+        _d.add_paragraph(_same)
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_sr_doc)
+        _rsr = subprocess.run([sys.executable, os.path.join(HERE, "self_repeat.py"), _sr_doc],
+                              capture_output=True, encoding="utf-8", errors="replace")
+        _so = _rsr.stdout or ""
+        check("sr 检出跨区域重复", "🔴 跨区域" in _so and _rsr.returncode == 1, _so[:400])
+        check("sr 输出重复对定位", "摘要" in _so and "结语" in _so, _so[:500])
+
+        # ---- 8n. 英文摘要对称性（english_audit） ----
+        print("[8n] english_audit（英文摘要与关键词）")
+        import english_audit as ea
+        check("ea 关键词切分", len(ea.split_kw("信息无障碍；多元障碍；智能帮扶")) == 3)
+        check("ea 剥离标签前缀", ea.split_kw("【关键词】信息无障碍；多元障碍")[0] == "信息无障碍")
+        _en_doc = os.path.join(td, "en.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以多元障碍群体为对象，构建了智能帮扶机制，"
+                         "并通过检测验证了系统的可用性与有效性，为图书馆无障碍服务提供参考。")
+        _d.add_paragraph("关键词：信息无障碍；多元障碍；智能帮扶；微信小程序")
+        _d.add_paragraph("Abstract: This study builds an intelligent assistance mechanism "
+                         "for people with diverse disabilities in libraries, and validates "
+                         "its usability and effectiveness through systematic testing, "
+                         "providing a reference for accessible library services.")
+        _d.add_paragraph("Key words: information accessibility; diverse disabilities; "
+                         "intelligent assistance; WeChat mini-program")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("随着数字技术快速发展，图书馆无障碍服务面临新的挑战。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_en_doc)
+        _ren = subprocess.run([sys.executable, os.path.join(HERE, "english_audit.py"), _en_doc],
+                              capture_output=True, encoding="utf-8", errors="replace")
+        _eo = _ren.stdout or ""
+        check("ea 端到端正常运行", "英文摘要与关键词对称性核验" in _eo, _eo[:200])
+        check("ea 检出关键词个数一致", "个数一致" in _eo, _eo[:400])
+        check("ea 输出中英对照表", "中英关键词对照" in _eo, _eo[-500:])
+
+        # ---- 8o. 标题编号体例（heading_audit） ----
+        print("[8o] heading_audit（标题编号体例）")
+        import heading_audit as ha
+        _hs = ha.extract_headings(["1 引言", "2.1 研究对象", "3.2.1 子层", "结语"], [])
+        check("ha 解析层级", [h["level"] for h in _hs] == [1, 2, 3, 1], [h["level"] for h in _hs])
+        # 合成问题稿：重号 + 断号 + 末章名错
+        _hd_doc = os.path.join(td, "hd.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("1 研究设计")
+        _d.add_paragraph("正文。")
+        _d.add_paragraph("1.2 研究对象")
+        _d.add_paragraph("正文。")
+        _d.add_paragraph("1.2 研究方法")
+        _d.add_paragraph("正文。")
+        _d.add_paragraph("3 结果分析")
+        _d.add_paragraph("正文。")
+        _d.add_paragraph("5 结论")
+        _d.add_paragraph("正文。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_hd_doc)
+        _rhd = subprocess.run([sys.executable, os.path.join(HERE, "heading_audit.py"), _hd_doc],
+                              capture_output=True, encoding="utf-8", errors="replace")
+        _ho = _rhd.stdout or ""
+        check("ha 端到端正常运行", "标题层级与编号体例核验" in _ho, _ho[:200])
+        check("ha 检出重号", "重号" in _ho, _ho[:400])
+        check("ha 检出断号", "断号" in _ho, _ho[:400])
+        check("ha 检出末章名非结语", "结语" in _ho and "结论" in _ho, _ho[:400])
+        check("ha 退出码 1", _rhd.returncode == 1, str(_rhd.returncode))
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:
