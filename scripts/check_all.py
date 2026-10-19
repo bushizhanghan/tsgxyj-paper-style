@@ -35,6 +35,9 @@
     ㉛ 引文年份越界（ref_year_check.py，未来文献红线级）
     ㉜ 文献类型标识（ref_type_check.py，标识缺失待办级）
     ㉝ 文献重复条目（ref_dup_check.py，重复给号待办级）
+    ㉞ 单章字数失衡（chapter_balance.py，>40% 待办级）
+    ㉟ 引言篇幅形态（intro_scale.py，缺缺口句红线级）
+    㠀 标题命名对位（heading_naming.py，提示级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -114,6 +117,9 @@ TOOLS = [
     ("㉛ 引文年份越界", "ref_year_check.py", False),
     ("㉜ 文献类型标识", "ref_type_check.py", False),
     ("㉝ 文献重复条目", "ref_dup_check.py", False),
+    ("㉞ 单章字数失衡", "chapter_balance.py", False),
+    ("㉟ 引言篇幅形态", "intro_scale.py", False),
+    ("㠀 标题命名对位", "heading_naming.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -508,6 +514,33 @@ if m and int(m.group(1)):
     todos.append(f"文献表重复条目 {m.group(1)} 项（见 ㉝，须合并共用序号）")
 elif m:
     print("· 文献表重复：✓ 无重复")
+
+# ㉞ 单章字数失衡：>40% → 待办
+cb_out = results.get("㉞ 单章字数失衡", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项严重失衡", cb_out)
+if m and int(m.group(1)):
+    todos.append(f"单章字数失衡 {m.group(1)} 项（>40%，见 ㉞）")
+elif m:
+    print("· 单章字数失衡：✓ 无")
+
+# ㉟ 引言篇幅形态：缺缺口句 → 红线（问题意识未立）
+is_out = results.get("㉟ 引言篇幅形态", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项问题", is_out)
+if m and int(m.group(1)):
+    if "未检出缺口句" in is_out:
+        red_flags.append("引言缺缺口句（问题意识未立，见 ㉟）")
+    else:
+        todos.append(f"引言篇幅形态 {m.group(1)} 项（见 ㉟）")
+elif m:
+    print("· 引言篇幅形态：✓ 正常")
+
+# 㠀 标题命名对位：提示级，只汇总
+hno_out = results.get("㠀 标题命名对位", {}).get("out", "")
+m = re.search(r"未含高频词根 (\d+) 个", hno_out)
+if m and int(m.group(1)):
+    print(f"· 标题命名对位：{m.group(1)} 个未含高频词根（提示级，见 㠀）")
+elif m:
+    print("· 标题命名对位：✓ 均含高频词根")
 
 print()
 if red_flags:

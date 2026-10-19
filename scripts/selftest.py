@@ -352,9 +352,9 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 三十三项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 三十六项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联三十三个工具", len(_tools_in) == 33, (_tools_in, len(_tools_in)))
+check("check_all 串联三十六个工具", len(_tools_in) == 36, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
@@ -363,6 +363,7 @@ for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.
               "paragraph_shape.py", "heading_shape.py", "abstract_shape.py",
               "benwen_usage.py", "structure_scale.py", "meta_scale.py",
               "ref_year_check.py", "ref_type_check.py", "ref_dup_check.py",
+              "chapter_balance.py", "intro_scale.py", "heading_naming.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -388,6 +389,9 @@ check("check_all ㉚ 接入小结",
 check("check_all ㉛㉜㉝ 接入小结",
       "未来文献" in _ca and "文献类型标识缺失" in _ca and "文献表重复条目" in _ca,
       "㉛㉜㉝ 小结未接入")
+check("check_all ㉞㉟㠀 接入小结",
+      "单章字数失衡" in _ca and "引言篇幅形态" in _ca and "标题命名对位" in _ca,
+      "㉞㉟㠀 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -2030,6 +2034,101 @@ if HAVE_DOCX:
         _rdo = _rrd.stdout or ""
         check("rdc 端到端正常运行", "文献表重复与高相似条目核验" in _rdo, _rdo[:200])
         check("rdc 检出完全重复", "完全重复" in _rdo and _rrd.returncode == 1, _rdo[:400])
+
+        # ---- 9h. 单章字数失衡（chapter_balance） ----
+        print("[9h] chapter_balance（单章字数失衡）")
+        import chapter_balance as chb
+        check("chb 阈值常量", (chb.HUGE, chb.TINY, chb.RATIO_LIMIT) == (0.40, 0.02, 25),
+              (chb.HUGE, chb.TINY, chb.RATIO_LIMIT))
+        _chb_doc = os.path.join(td, "chb.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 主体论证章节")
+        _big = "本部分围绕核心问题展开系统论证，从理论到实践逐层推进。" * 30
+        _d.add_paragraph(_big)
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_chb_doc)
+        _rch = subprocess.run([sys.executable, os.path.join(HERE, "chapter_balance.py"),
+                               _chb_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _cho = _rch.stdout or ""
+        check("chb 端到端正常运行", "单章字数失衡核验" in _cho, _cho[:200])
+        check("chb 检出单章失衡", "严重失衡" in _cho and _rch.returncode == 1, _cho[:400])
+        check("chb 输出逐章占比", "逐章占比" in _cho, _cho[:300])
+
+        # ---- 9i. 引言篇幅形态（intro_scale） ----
+        print("[9i] intro_scale（引言篇幅形态）")
+        import intro_scale as isc
+        check("isc 阈值常量",
+              (isc.INTRO_MED, isc.OVER_LIMIT, isc.UNDER_LIMIT) == (7.1, 15.0, 3.0),
+              (isc.INTRO_MED, isc.OVER_LIMIT, isc.UNDER_LIMIT))
+        check("isc 缺口句识别", bool(isc.GAP_RE.search("既有研究尚缺乏对多元群体的系统探讨")))
+        check("isc 无缺口句不误判", not isc.GAP_RE.search("本研究以某群体为对象开展研究"))
+        _isc_doc = os.path.join(td, "isc.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 研究设计")
+        _d.add_paragraph("本研究以某群体为对象，采用问卷与测试相结合的方法开展研究工作，样本具有代表性。")
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_isc_doc)
+        _ris = subprocess.run([sys.executable, os.path.join(HERE, "intro_scale.py"),
+                               _isc_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _iso = _ris.stdout or ""
+        check("isc 端到端正常运行", "引言篇幅形态核验" in _iso, _iso[:200])
+        check("isc 检出缺口句缺失", "未检出缺口句" in _iso and _ris.returncode == 1,
+              _iso[:400])
+
+        # ---- 9j. 标题命名对位（heading_naming） ----
+        print("[9j] heading_naming（标题命名对位）")
+        import heading_naming as hnm
+        check("hnm 剥编号", hnm.strip_num("2.1研究方法") == "研究方法",
+              hnm.strip_num("2.1研究方法"))
+        _cd_hnm = corpus.find_corpus_dir()
+        if _cd_hnm:
+            _roots, _src = hnm.build_roots(_cd_hnm)
+            check("hnm 词根来自语料", "语料库实测" in _src and len(_roots) > 100,
+                  (_src, len(_roots)))
+            # 误报防护：该刊常见命名必须命中词根
+            check("hnm 常见命名命中词根",
+                  all(any(r in t for r in _roots) for t in
+                      ["研究方法", "研究设计", "数据来源", "理论基础", "结论与启示"]),
+                  [t for t in ["研究方法", "研究设计", "数据来源", "理论基础", "结论与启示"]
+                   if not any(r in t for r in _roots)])
+        _hnm_doc = os.path.join(td, "hnm.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("1 研究方法")
+        _d.add_paragraph("本研究以某群体为对象，采用问卷与测试相结合的方法开展研究工作。")
+        _d.add_paragraph("2 Methodology")
+        _d.add_paragraph("本部分为纯英文层级标题，用于验证英文标题提示能力，字数足够长以通过过滤条件。")
+        _d.add_paragraph("3 结语")
+        _d.add_paragraph("结语正文内容。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_hnm_doc)
+        _rhn = subprocess.run([sys.executable, os.path.join(HERE, "heading_naming.py"),
+                               _hnm_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _hno = _rhn.stdout or ""
+        check("hnm 端到端正常运行", "标题命名对位核验" in _hno, _hno[:200])
+        check("hnm 检出纯英文层级标题", "纯英文" in _hno, _hno[:400])
+        check("hnm 提示级退出码 0", _rhn.returncode == 0, str(_rhn.returncode))
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:
