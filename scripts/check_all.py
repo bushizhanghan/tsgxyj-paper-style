@@ -32,6 +32,9 @@
     ㉘ 「本文」使用率（benwen_usage.py，摘要含「本文」红线级）
     ㉙ 篇章规模（structure_scale.py，章节数/字数，待办级）
     ㉚ 摘要字数/段长/图表对标（meta_scale.py，摘要字数越界待办级）
+    ㉛ 引文年份越界（ref_year_check.py，未来文献红线级）
+    ㉜ 文献类型标识（ref_type_check.py，标识缺失待办级）
+    ㉝ 文献重复条目（ref_dup_check.py，重复给号待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -108,6 +111,9 @@ TOOLS = [
     ("㉘ 「本文」使用率", "benwen_usage.py", False),
     ("㉙ 篇章规模", "structure_scale.py", False),
     ("㉚ 摘要字数/段长/图表对标", "meta_scale.py", False),
+    ("㉛ 引文年份越界", "ref_year_check.py", False),
+    ("㉜ 文献类型标识", "ref_type_check.py", False),
+    ("㉝ 文献重复条目", "ref_dup_check.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -478,6 +484,30 @@ if m and int(m.group(1)):
     todos.append(f"摘要字数越界（{_m2.group(1)} 字，见 ㉚）" if _m2 else "摘要字数越界（见 ㉚）")
 elif m:
     print("· 摘要字数/段长/图表：✓ 在常规区间")
+
+# ㉛ 引文年份越界：未来文献 → 红线（引用不存在文献是硬伤）
+ry_out = results.get("㉛ 引文年份越界", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项越界年硬伤", ry_out)
+if m and int(m.group(1)):
+    red_flags.append(f"引文含未来文献 {m.group(1)} 条（见 ㉛，出版年晚于当前年）")
+elif m:
+    print("· 引文年份：✓ 无越界年")
+
+# ㉜ 文献类型标识：缺失 → 待办（GB/T 7714 必填）
+rt_out = results.get("㉜ 文献类型标识", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项类型标识缺失", rt_out)
+if m and int(m.group(1)):
+    todos.append(f"文献类型标识缺失 {m.group(1)} 条（见 ㉜，GB/T 7714 必填）")
+elif m:
+    print("· 文献类型标识：✓ 全部带标识")
+
+# ㉝ 文献重复条目：完全/同题名重复 → 待办
+rd_out = results.get("㉝ 文献重复条目", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项重复", rd_out)
+if m and int(m.group(1)):
+    todos.append(f"文献表重复条目 {m.group(1)} 项（见 ㉝，须合并共用序号）")
+elif m:
+    print("· 文献表重复：✓ 无重复")
 
 print()
 if red_flags:

@@ -352,9 +352,9 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 三十项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 三十三项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联三十个工具", len(_tools_in) == 30, (_tools_in, len(_tools_in)))
+check("check_all 串联三十三个工具", len(_tools_in) == 33, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
@@ -362,6 +362,7 @@ for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.
               "keyword_echo.py", "paragraph_structure.py", "sentence_length.py",
               "paragraph_shape.py", "heading_shape.py", "abstract_shape.py",
               "benwen_usage.py", "structure_scale.py", "meta_scale.py",
+              "ref_year_check.py", "ref_type_check.py", "ref_dup_check.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -384,6 +385,9 @@ check("check_all ㉘㉙ 接入小结",
       "「本文」使用率" in _ca and "篇章规模" in _ca, "㉘㉙ 小结未接入")
 check("check_all ㉚ 接入小结",
       "摘要字数越界" in _ca, "㉚ 小结未接入")
+check("check_all ㉛㉜㉝ 接入小结",
+      "未来文献" in _ca and "文献类型标识缺失" in _ca and "文献表重复条目" in _ca,
+      "㉛㉜㉝ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1952,6 +1956,80 @@ if HAVE_DOCX:
         check("msc 检出摘要过长", "超过该刊单篇常规上限" in _mso2 and _rms2.returncode == 1,
               _mso2[:400])
         check("msc 输出该刊分位", "P25–P90" in _mso2 and "均值" in _mso2, _mso2[:300])
+
+        # ---- 9e. 引文年份越界（ref_year_check） ----
+        print("[9e] ref_year_check（引文年份）")
+        import ref_year_check as ryc
+        check("ryc 当前年基准", ryc.CUR_YEAR == 2026, ryc.CUR_YEAR)
+        check("ryc 剥离访问日期保留出版日期",
+              ryc.pub_years("W3C. 某标准[S/OL]. (2018-06-05)[2026-09-01]. http://x") == [2018],
+              ryc.pub_years("W3C. 某标准[S/OL]. (2018-06-05)[2026-09-01]. http://x"))
+        check("ryc 剥离标准号年份",
+              ryc.pub_years("信息技术 某要求: GB/T 37668—2019[S]. 北京: 某社, 2019.") == [2019],
+              ryc.pub_years("信息技术 某要求: GB/T 37668—2019[S]. 北京: 某社, 2019."))
+        _ryc_doc = os.path.join(td, "ryc.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2027, 40(3): 12-18.")   # 未来文献
+        _d.add_paragraph("[2] 乙. 某文献[J]. 某刊, 2020.")
+        _d.save(_ryc_doc)
+        _rry = subprocess.run([sys.executable, os.path.join(HERE, "ref_year_check.py"),
+                               _ryc_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _ryo = _rry.stdout or ""
+        check("ryc 端到端正常运行", "引文出版年越界与陈旧核验" in _ryo, _ryo[:200])
+        check("ryc 检出未来文献", "晚于当前年" in _ryo and _rry.returncode == 1, _ryo[:400])
+
+        # ---- 9f. 文献类型标识（ref_type_check） ----
+        print("[9f] ref_type_check（类型标识）")
+        import ref_type_check as rtc
+        check("rtc 标识识别", bool(rtc.TYPE_RE.search("某文献[J].")))
+        check("rtc 电子文献推断", rtc.infer_type("某标准[Z/OL]. http://x.com") == "EB/OL")
+        _rtc_doc = os.path.join(td, "rtc.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献. 某刊, 2020.")              # 无标识
+        _d.add_paragraph("[2] 乙. 某文献[J]. 某刊, 2020.")
+        _d.save(_rtc_doc)
+        _rrt = subprocess.run([sys.executable, os.path.join(HERE, "ref_type_check.py"),
+                               _rtc_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _rto = _rrt.stdout or ""
+        check("rtc 端到端正常运行", "文献类型标识缺失与形态核验" in _rto, _rto[:200])
+        check("rtc 检出标识缺失", "无类型标识" in _rto and _rrt.returncode == 1, _rto[:400])
+        check("rtc 输出类型分布", "本文类型分布" in _rto, _rto[:300])
+
+        # ---- 9g. 文献重复条目（ref_dup_check） ----
+        print("[9g] ref_dup_check（重复条目）")
+        import ref_dup_check as rdc
+        check("rdc 序号解析", rdc.ref_num("[12] 甲. 某文献[J].") == 12)
+        check("rdc 归一化去标点", rdc.norm_entry("[1] 甲. 某文献[J]. 某刊, 2020.")
+              == rdc.norm_entry("甲某文献[j]某刊,2020"))
+        _rdc_doc = os.path.join(td, "rdc.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020, 40(3): 12-18.")
+        _d.add_paragraph("[2] 甲. 某文献[J]. 某刊, 2020, 40(3): 12-18.")   # 完全重复
+        _d.add_paragraph("[3] 乙. 某文献[J]. 某刊, 2020.")
+        _d.save(_rdc_doc)
+        _rrd = subprocess.run([sys.executable, os.path.join(HERE, "ref_dup_check.py"),
+                               _rdc_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _rdo = _rrd.stdout or ""
+        check("rdc 端到端正常运行", "文献表重复与高相似条目核验" in _rdo, _rdo[:200])
+        check("rdc 检出完全重复", "完全重复" in _rdo and _rrd.returncode == 1, _rdo[:400])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:
