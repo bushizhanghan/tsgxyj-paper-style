@@ -352,16 +352,16 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 二十九项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 三十项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联二十九个工具", len(_tools_in) == 29, (_tools_in, len(_tools_in)))
+check("check_all 串联三十个工具", len(_tools_in) == 30, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
               "corpus_similarity.py", "conclusion_echo.py", "figure_numbering.py",
               "keyword_echo.py", "paragraph_structure.py", "sentence_length.py",
               "paragraph_shape.py", "heading_shape.py", "abstract_shape.py",
-              "benwen_usage.py", "structure_scale.py",
+              "benwen_usage.py", "structure_scale.py", "meta_scale.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -382,6 +382,8 @@ check("check_all ㉖㉗ 接入小结",
       "标题形态" in _ca and "摘要要素顺序" in _ca, "㉖㉗ 小结未接入")
 check("check_all ㉘㉙ 接入小结",
       "「本文」使用率" in _ca and "篇章规模" in _ca, "㉘㉙ 小结未接入")
+check("check_all ㉚ 接入小结",
+      "摘要字数越界" in _ca, "㉚ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1902,6 +1904,54 @@ if HAVE_DOCX:
         check("ssc 端到端正常运行", "篇章规模核验" in _sso, _sso[:200])
         check("ssc 检出章节过少", "结构未展开" in _sso and _rss.returncode == 1, _sso[:400])
         check("ssc 检出字数单薄", "篇幅单薄" in _sso, _sso[:500])
+
+        # ---- 9d. 摘要字数/段长/图表对标（meta_scale） ----
+        print("[9d] meta_scale（摘要字数/段长/图表对标）")
+        import meta_scale as msc
+        check("msc 分位常量齐全",
+              (msc.ABS_P25, msc.ABS_P50, msc.ABS_P90, msc.ABS_MIN, msc.ABS_MAX,
+               msc.MAXPARA_P50, msc.MAXPARA_P90, msc.FIG_MEAN, msc.TAB_MEAN) ==
+              (238, 262, 339, 150, 400, 826, 1336, 2.4, 4.3),
+              (msc.ABS_P25, msc.ABS_P50, msc.ABS_P90, msc.ABS_MIN, msc.ABS_MAX,
+               msc.MAXPARA_P50, msc.MAXPARA_P90, msc.FIG_MEAN, msc.TAB_MEAN))
+        # 摘要过短 → 应报问题
+        _msc_doc = os.path.join(td, "msc.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_msc_doc)
+        _rms = subprocess.run([sys.executable, os.path.join(HERE, "meta_scale.py"),
+                               _msc_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _mso = _rms.stdout or ""
+        check("msc 端到端正常运行", "摘要字数 / 最大段长 / 图表数量对标" in _mso, _mso[:200])
+        check("msc 检出摘要过短", "低于该刊单篇常规下限" in _mso and _rms.returncode == 1,
+              _mso[:400])
+        # 摘要过长 → 应报问题
+        _msc_doc2 = os.path.join(td, "msc2.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：" + "本研究围绕某问题开展深入研究，" * 40)
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_msc_doc2)
+        _rms2 = subprocess.run([sys.executable, os.path.join(HERE, "meta_scale.py"),
+                                _msc_doc2], capture_output=True, encoding="utf-8",
+                               errors="replace")
+        _mso2 = _rms2.stdout or ""
+        check("msc 检出摘要过长", "超过该刊单篇常规上限" in _mso2 and _rms2.returncode == 1,
+              _mso2[:400])
+        check("msc 输出该刊分位", "P25–P90" in _mso2 and "均值" in _mso2, _mso2[:300])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:

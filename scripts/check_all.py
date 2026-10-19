@@ -31,6 +31,7 @@
     ㉗ 摘要要素顺序与句式（abstract_shape.py，官方忌词红线级）
     ㉘ 「本文」使用率（benwen_usage.py，摘要含「本文」红线级）
     ㉙ 篇章规模（structure_scale.py，章节数/字数，待办级）
+    ㉚ 摘要字数/段长/图表对标（meta_scale.py，摘要字数越界待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -106,6 +107,7 @@ TOOLS = [
     ("㉗ 摘要要素顺序与句式", "abstract_shape.py", False),
     ("㉘ 「本文」使用率", "benwen_usage.py", False),
     ("㉙ 篇章规模", "structure_scale.py", False),
+    ("㉚ 摘要字数/段长/图表对标", "meta_scale.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -467,6 +469,15 @@ if m and int(m.group(1)):
     todos.append(f"篇章规模偏离（章节数/字数，见 ㉙）")
 elif m:
     print("· 篇章规模：✓ 在常规区间")
+
+# ㉚ 摘要字数/段长/图表对标：摘要字数越界 → 待办
+ms_out = results.get("㉚ 摘要字数/段长/图表对标", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项问题", ms_out)
+if m and int(m.group(1)):
+    _m2 = re.search(r"摘要 (\d+) 字", ms_out)
+    todos.append(f"摘要字数越界（{_m2.group(1)} 字，见 ㉚）" if _m2 else "摘要字数越界（见 ㉚）")
+elif m:
+    print("· 摘要字数/段长/图表：✓ 在常规区间")
 
 print()
 if red_flags:
