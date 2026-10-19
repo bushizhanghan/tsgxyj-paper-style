@@ -352,6 +352,13 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
+# 十二项工具串联完整性（⑩⑪⑫ 等新增项不得从 TOOLS 表脱落）
+_tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
+check("check_all 串联十二个工具", len(_tools_in) == 12, (_tools_in, len(_tools_in)))
+for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
+              "argument_check.py", "table_fig_audit.py"):
+    check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
+check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -1296,6 +1303,25 @@ if HAVE_DOCX:
         check("rt 四分类标签齐全",
               all(hasattr(rt, a) for a in ("CAT_MUST", "CAT_Q", "CAT_SUG", "CAT_PRAISE")),
               [a for a in dir(rt) if a.startswith("CAT_")][:12])
+        # 该刊真实高频意见表述必须判必改（依 submission-reality 校准）
+        _must_cases = [
+            "参考文献偏少且较为陈旧",
+            "第三部分论证不够严谨，存在逻辑跳跃",
+            "图表编号混乱，表2与表3顺序颠倒",
+            "创新性不足，与已有研究差异不明显",
+            "概念使用前后不一致",
+            "数据处理过程未交代清楚，无法核对",
+            "样本量不足，难以支撑结论",
+            "字数超标，建议压缩",
+        ]
+        _miss = [c for c in _must_cases if rt.classify(c)[0] != rt.CAT_MUST]
+        check("rt 真实高频意见判必改", not _miss, _miss)
+        # 疑问句不应被必改误吞
+        _q_cases = ["是否可以采用混合方法？", "为何选择该样本？", "参考文献为何偏少？"]
+        _qbad = [c for c in _q_cases if rt.classify(c)[0] != rt.CAT_Q]
+        check("rt 疑问句判疑问", not _qbad, _qbad)
+        # 纯表扬不误判
+        check("rt 纯表扬判表扬", rt.classify("论文选题有价值，结构完整，同意发表")[0] == rt.CAT_PRAISE)
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:

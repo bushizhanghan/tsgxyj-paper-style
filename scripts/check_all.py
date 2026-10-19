@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""check_all.py —— 投稿前一键总检（模式 A + D + 润色 + E + G + 论证链 + 数字一致性 + 术语漂移）
+"""check_all.py —— 投稿前一键总检（模式 A + D + 润色 + E + G + 论证链 + 数字一致性 + 术语漂移 + 引文关联）
 
-按投稿前自查的实用顺序，串起十一个工具，各自独立跑、互不影响：
+按投稿前自查的实用顺序，串起十二个工具，各自独立跑、互不影响：
     ① GB/T 7714 文献要素核验（ref_format.py）
     ② 引用标注与对应核验（verify_refs.py，模式 D）
     ③ 引文结构（时效/类型/来源）（citation_analysis.py）
@@ -13,6 +13,7 @@
     ⑨ 图表体例与三线表规范（table_fig_audit.py）
     ⑩ 摘要—正文数字一致性（number_consistency.py，红线级）
     ⑪ 术语漂移检测（term_consistency.py，同义异形词混用，待办级）
+    ⑫ 引文—论点关联（citation_quality.py，装饰性引用，待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -70,6 +71,7 @@ TOOLS = [
     ("⑨ 图表体例与三线表规范", "table_fig_audit.py", False),
     ("⑩ 摘要—正文数字一致性", "number_consistency.py", False),
     ("⑪ 术语漂移检测（同义异形词混用）", "term_consistency.py", False),
+    ("⑫ 引文—论点关联（装饰性引用）", "citation_quality.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -255,6 +257,21 @@ elif m:
 elif results.get("⑪ 术语漂移检测（同义异形词混用）", {}).get("rc") == 1:
     # 退出码 1 但组数解析失败 → 兜底记一条待核，防止静默漏报
     todos.append("术语混用待核（见 ⑪，组数解析失败）")
+
+# ⑫ 引文—论点关联：零关联引用点 → 待办级（🟡 弱关联只提示，不占待办位）
+cq_out = results.get("⑫ 引文—论点关联（装饰性引用）", {}).get("out", "")
+# 分档统计行：🔴 零关联 12 ｜ 🟡 弱关联 3 ｜ ✅ 有关联 22
+m = re.search(r"🔴 零关联 (\d+)\s*｜\s*🟡 弱关联 (\d+)", cq_out)
+if m:
+    _red_n, _weak_n = int(m.group(1)), int(m.group(2))
+    if _red_n:
+        todos.append(f"零关联引用点 {_red_n} 个（疑似装饰性引用，见 ⑫，逐条确认是否真支撑本句）")
+    if _weak_n:
+        todos.append(f"弱关联引用点 {_weak_n} 个（有交集但弱，见 ⑫，人工复核）")
+    if not _red_n and not _weak_n:
+        print("· 引文—论点关联（装饰性引用）：✓ 无疑似")
+elif results.get("⑫ 引文—论点关联（装饰性引用）", {}).get("rc") == 1:
+    todos.append("引文—论点关联待核（见 ⑫，计数解析失败）")
 
 print()
 if red_flags:
