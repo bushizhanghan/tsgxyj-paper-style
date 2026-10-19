@@ -44,6 +44,13 @@
     ㊴ 摘要—关键词关联（abstract_keyword_link.py，过半关键词未在摘要出现待办级）
     ㊵ 前置元数据序列（front_matter.py，官方 §4 序列，待办级）
     ㊶ 英文题名核验（en_title_check.py，缺失待办级）
+    ㊷ 文献标点形态（ref_format_style.py，官方 §7 全角标点，待办级）
+    ㊸ 电子文献格式（ref_online_format.py，日期/URL，待办级）
+    ㊹ 专著报纸格式（ref_book_format.py，出版地/出版者，待办级）
+    ㊺ 句首模式单调性（sentence_pattern.py，连接词>10% 待办级）
+    ㊻ 作者信息形态（author_meta.py，官方 §8，待办级）
+    ㊼ 文末序列（closing_format.py，官方 §4 后半段，待办级）
+    ㊽ 投稿邮件生成（submission_email.py，生成器，不计分级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -132,6 +139,13 @@ TOOLS = [
     ("㊴ 摘要—关键词关联", "abstract_keyword_link.py", False),
     ("㊵ 前置元数据序列", "front_matter.py", False),
     ("㊶ 英文题名核验", "en_title_check.py", False),
+    ("㊷ 文献标点形态", "ref_format_style.py", False),
+    ("㊸ 电子文献格式", "ref_online_format.py", False),
+    ("㊹ 专著报纸格式", "ref_book_format.py", False),
+    ("㊺ 句首模式单调性", "sentence_pattern.py", False),
+    ("㊻ 作者信息形态", "author_meta.py", False),
+    ("㊼ 文末序列", "closing_format.py", False),
+    ("㊽ 投稿邮件生成", "submission_email.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -611,6 +625,50 @@ elif "🔴" in et_out:
     todos.append(f"英文题名形态 {_m2.group(1) if _m2 else ''} 项（见 ㊶）")
 elif et_out:
     print("· 英文题名：✓ 合规")
+
+# ㊷ 文献标点形态：半角标点误用 → 待办（官方 §7 全角「．」）
+rfs_out = results.get("㊷ 文献标点形态", {}).get("out", "")
+if "🔴" in rfs_out:
+    _m2 = re.search(r"🔴[^\n]*", rfs_out)
+    todos.append(f"文献标点形态问题（见 ㊷，官方 §7 要求全角「．」）")
+elif rfs_out:
+    print("· 文献标点形态：✓ 符合官方")
+
+# ㊸ 电子文献格式：日期未补 0 / 缺 URL → 待办
+ron_out = results.get("㊸ 电子文献格式", {}).get("out", "")
+if "🔴" in ron_out:
+    todos.append("电子文献格式问题（缺引用日期/URL 或月日未补 0，见 ㊸）")
+elif ron_out and "🔴 发现" not in ron_out:
+    print("· 电子文献格式：✓ 符合官方")
+
+# ㊹ 专著报纸格式：缺出版地/出版者 → 待办
+rbk_out = results.get("㊹ 专著报纸格式", {}).get("out", "")
+if "🔴" in rbk_out:
+    todos.append("专著/报纸文献格式问题（见 ㊹，官方 §7）")
+elif rbk_out:
+    print("· 专著报纸格式：✓ 符合官方（或不适用）")
+
+# ㊺ 句首模式单调性：连接词起句 >10% → 待办
+sp_out = results.get("㊺ 句首模式单调性", {}).get("out", "")
+if "🔴" in sp_out:
+    todos.append("句首模式过度衔接（连接词起句 >10%，见 ㊺）")
+elif sp_out:
+    print("· 句首模式：✓ 贴近该刊分布")
+
+# ㊻ 作者信息形态：与署名不一致/表述不规范 → 待办
+am_out = results.get("㊻ 作者信息形态", {}).get("out", "")
+if "🔴" in am_out:
+    todos.append("作者信息形态问题（见 ㊻，官方 §8）")
+elif am_out:
+    print("· 作者信息形态：✓ 合规")
+
+# ㊼ 文末序列：缺作者简介/联系方式/定稿日期 → 待办（官方 §4 序列）
+cf_out = results.get("㊼ 文末序列", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项文末序列问题", cf_out)
+if m and int(m.group(1)):
+    todos.append(f"文末序列缺项 {m.group(1)} 项（作者简介/联系方式/定稿日期，见 ㊼）")
+elif m:
+    print("· 文末序列：✓ 符合官方 §4")
 
 print()
 if red_flags:

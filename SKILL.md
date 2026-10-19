@@ -46,7 +46,7 @@ metadata:
 - 量化规则取自 `references/`，每条带出处；标注「分析判断」的条目是归纳判断，非编辑口径，向用户说明。
 - **官方优先**：形式合规以 `references/official-guidelines.md`（该刊官网原文）为准；实测统计（摘要 262 字、段长 206 等）只用于风格拟合。两者冲突时官方优先。
 - **事实优先**：改写只动形式；引用不虚构、数字不擅改（模式 D 的纪律适用于所有模式）。
-- **修复即断言**：改动 `scripts/` 后必须跑 `python scripts/selftest.py`（556 项断言，退出码 0 = 全过），防止回归。
+- **修复即断言**：改动 `scripts/` 后必须跑 `python scripts/selftest.py`（576 项断言，退出码 0 = 全过），防止回归。
 - **数字一致性**：摘要与正文的样本量、百分比、题次必须逐一核对（`number_consistency.py` 已接入 `check_all.py` 第⑩项，红线级）；改写前后同样要做数字比对——「数字不擅改」是所有模式的共同纪律。
 - **术语一致**：同一概念全文用一种写法，不混用同义异形词（`term_consistency.py` 按该刊 118 篇原文篇数给出偏好词，已接入 `check_all.py` 第⑪项，待办级）；确需区分两个相近概念时，在首次出现处显式界定，避免读者误读为笔误。
 - **回复完整性**：返修提交前每条意见都要有「复述 → 回应 → 修改位置」三件套，且位置精确到节/段（`response_check.py` 按编号集合核漏回，退出码 1 = 有硬伤）；只写「已修改」不写改在哪儿，审稿人无法核对。
@@ -94,7 +94,7 @@ metadata:
 - `number_consistency.py <论文.docx>` — **摘要—正文数字一致性核验器（红线级）**：抽取摘要/正文/结语中的样本量、百分比、题次等数值断言（阿拉伯数字＋中文数字＋百分之X＋X成），按「单位＋前接名词」精确配对、关键词唯一兜底，报出摘要与正文同名指标数值不等的硬伤；另核稿内逻辑（回收/有效样本大于发放、百分比越界、有效率与「有效÷发放」算不符）与条目数声称（摘要「四类对策」↔正文实际列举数）；模糊量与多候选只报待核对；退出码 1 = 存在数字硬伤
 - `term_consistency.py <论文.docx>` — **术语漂移检测器**：按 26 组同义异形词（信息无障碍/信息可及性、适老化/老龄友好、fsQCA/组态分析…）扫描摘要/正文/结语/关键词，稿内混用 ≥2 个成员即报「非偏好词→偏好词」统一建议，附**该刊 118 篇原文的真实篇数**（偏好词＝篇数最高者）；白名单按见刊论文共现率设定（该刊自己也在用的写法不误报，如大语言模型/大模型、老年人/老年群体）；单用非偏好词只作提示级；已接入 `check_all.py` 第⑪项（待办级，不计红线）；退出码 1 = 检出混用
 - `response_check.py --reviews <审稿意见> --response <回复信>` — **审稿回复逐条回应核对器（模式 F）**：输入审稿意见文件 + 回复信文件（.docx 段落/表格、.md/.txt 含 markdown 表格），核验①意见条数 vs 回应区块数（按编号集合比对，直接报漏回了哪条）②每条是否含「意见（复述）/回应/修改位置」三件套 ③位置标注是否精确到节/段/页/表/图；分档🔴硬伤（漏回/缺件/无位置）｜🟡待核对（位置笼统、未识别到结构、疑似答非所问）｜✅完整；退出码 1 = 有硬伤
-- `check_all.py <论文.docx>` — **投稿前一键总检**：串联 ref_format → verify_refs → citation_analysis → diagnose → language_audit → mock_review → benchmark → argument_check → table_fig_audit → number_consistency → term_consistency → citation_quality → self_repeat → english_audit → heading_audit → citation_distribution → figure_data_check → submission_pack → corpus_similarity → conclusion_echo → figure_numbering → keyword_echo → paragraph_structure → sentence_length → paragraph_shape → heading_shape → abstract_shape → benwen_usage → structure_scale → meta_scale → ref_year_check → ref_type_check → ref_dup_check → chapter_balance → intro_scale → heading_naming → le_density → ji_density → hedge_ratio → abstract_keyword_link → front_matter → en_title_check → number_consistency → term_consistency，自动汇总红线/待办与模拟审稿分数，并输出与上次总检的指标对比（快照自动记录）；`--quick` 只跑前两项、`--no-review` 跳过模拟审稿；退出码 0 = 无红线
+- `check_all.py <论文.docx>` — **投稿前一键总检**：串联 ref_format → verify_refs → citation_analysis → diagnose → language_audit → mock_review → benchmark → argument_check → table_fig_audit → number_consistency → term_consistency → citation_quality → self_repeat → english_audit → heading_audit → citation_distribution → figure_data_check → submission_pack → corpus_similarity → conclusion_echo → figure_numbering → keyword_echo → paragraph_structure → sentence_length → paragraph_shape → heading_shape → abstract_shape → benwen_usage → structure_scale → meta_scale → ref_year_check → ref_type_check → ref_dup_check → chapter_balance → intro_scale → heading_naming → le_density → ji_density → hedge_ratio → abstract_keyword_link → front_matter → en_title_check → ref_format_style → ref_online_format → ref_book_format → sentence_pattern → author_meta → closing_format → submission_email → number_consistency → term_consistency，自动汇总红线/待办与模拟审稿分数，并输出与上次总检的指标对比（快照自动记录）；`--quick` 只跑前两项、`--no-review` 跳过模拟审稿；退出码 0 = 无红线
 - `argument_check.py <论文.docx>` — **论证链对仗核对**：提取「发现句」（一是/其二/占比/结果表明…）与「对策句」（（1）（2）/其一/应…，收口章优先），按主题词重叠逐条匹配并分档（强回应／弱回应／疑似缺回应），定位未对仗的发现；退出码 1 = 存在疑似缺回应
 - `citation_quality.py <论文.docx>` — **引文—论点关联核验**（模式 D 深挖）：对每个引用点 [n] 取所在句+前一句为论点上下文，与文献题名主题词做重叠评分（🔴零关联/🟡弱关联/✅有关联），识别「某某[n]指出」规范挂靠；退出码 1 = 存在零关联引用点
 - `progress_dashboard.py <论文.docx>` — **投稿就绪度看板**：七项指标（红线0/审稿分≥85/文献≥刊P25/无占位符/数字无硬伤/术语无混用/投稿包齐备）逐项 ✓✗ + 量化差距 + Top3 修复建议（按对分数的边际影响排序）；退出码 0 = 七项全就绪
@@ -129,10 +129,17 @@ metadata:
 - `abstract_keyword_link.py <论文.docx>` — **摘要—关键词关联核验**：逐词核关键词是否在摘要出现（整词或作为更长中文串的子串）；过半未出现判脱节（🔴）；与 ㉒ 互补（㉒ 查全文覆盖，本项查摘要派生）；退出码 1 = 过半未在摘要出现
 - `front_matter.py <论文.docx>` — **前置元数据序列核验**（官方 §4）：中文题名→作者→英文题名→英文作者→摘要→关键词→Abstract:→Key words: 的出现顺序与完整性；真实稿实测可抓出「缺英文题名」；退出码 1 = 序列问题
 - `en_title_check.py <论文.docx>` — **英文题名核验**（官方 §4/§7）：实意词首字母大写（Title Case）、与中文题名对应性（词数比）、副标题破折号衔接；缺英文题名时报「无法核验」提示；退出码 1 = 形态问题
+- `ref_format_style.py <论文.docx>` — **文献标点形态核验**（官方 §7）：中文条目分隔点全角「．」、年(期)半角括号、页码半角「-」、姓名后分隔点；外文条目按 GB/T 半角不判红；退出码 1 = 有标点问题
+- `ref_online_format.py <论文.docx>` — **电子文献格式核验**（官方 §7）：「[年-月-日]」引用日期方括号、URL、月日为单数前加 0（2023-06-05 而非 2023-6-5）；退出码 1 = 有格式问题
+- `ref_book_format.py <论文.docx>` — **专著报纸格式核验**（官方 §7）：M 条目出版地/出版者/出版年/参考页码、N 条目月日补 0 与版面号；无该类条目时明确提示不适用；退出码 1 = 有格式问题
+- `sentence_pattern.py <论文.docx>` — **句首模式单调性核验**：直接陈述/连接词起句/时间背景起句/「本研究」起句四类分布对照该刊实测（94.3%/2.5%/0.9%/3.6%，4743 段）；连接词起句 >10% 判过度衔接；序数分条单列不计入；退出码 1 = 过度衔接
+- `author_meta.py <论文.docx>` — **作者信息形态核验**（官方 §8）：姓名与文首署名一致性、职称学位表述规范性、研究方向数量、单位全称；附官方示例；退出码 1 = 有不一致/不规范
+- `closing_format.py <论文.docx>` — **文末序列核验**（官方 §4 后半段）：结语→注释→参考文献→作者简介→邮编/地址/电话/邮箱/定稿日期 的顺序与完整性；XML 层实读脚注尾注；退出码 1 = 有缺项
+- `submission_email.py <论文.docx> [--out f]` — **投稿邮件生成器**：读 response-template.md 邮件骨架，填入题名/字数/栏目对位/摘要核心发现，生成含官方邮箱与随稿附件清单的投稿邮件草稿
 - `benchmark_paper.py <论文.docx>` — **模式 G 主工具**：百分位对标评估（语料库自动定位 + `--json`）
 - `fetch_reviews_direct.py [--pages 起 止]` — **投稿者反馈抓取与解析**（直连抓取该刊点评页并结构化，用于维护 submission-reality.md）；`--analyze-only` 只分析缓存
 - `feedback_loop.py <论文.docx>` — **审查反哺闭环**：自动判定「已见刊论文 / 用户投稿稿」——已见刊走**全面吸收**（更新 corpus_stats.json 并重算基准）；用户稿走**只取长处**（沉淀正面样本，绝不污染基准）；`--report` 查看累积观察，`--dry-run` 预演；短板/长处累计 ≥5 次时提示可调整阈值
-- `selftest.py` — **工具链自检**：556 项断言（指标计算、结构/摘要体检、GB/T 7714 核验与误报防护、检索逻辑、原文模式挖掘、润色词典、引文分析、模拟审稿与语言体检、合成 docx 端到端、xref 域化/退域往返、13 维打分卡文档守卫、论证链信号规则与语义对仗集成、官方排版序列与投稿包检测、三线表审计、句式脚手架生成器、分栏目精细化基线、摘要—正文数字一致性与条目数核对、术语漂移检测与白名单共现率证据守卫、审稿回复逐条回应完整性与位置精确度），改脚本后必跑，退出码 0 = 全过
+- `selftest.py` — **工具链自检**：576 项断言（指标计算、结构/摘要体检、GB/T 7714 核验与误报防护、检索逻辑、原文模式挖掘、润色词典、引文分析、模拟审稿与语言体检、合成 docx 端到端、xref 域化/退域往返、13 维打分卡文档守卫、论证链信号规则与语义对仗集成、官方排版序列与投稿包检测、三线表审计、句式脚手架生成器、分栏目精细化基线、摘要—正文数字一致性与条目数核对、术语漂移检测与白名单共现率证据守卫、审稿回复逐条回应完整性与位置精确度），改脚本后必跑，退出码 0 = 全过
 
 **Word 交叉引用域脚本**（参考文献 [n] → 可跳转 REF 域）：
 

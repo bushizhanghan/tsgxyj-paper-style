@@ -48,24 +48,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import corpus  # noqa: E402
 import diagnose_paper as dp  # noqa: E402
 
-def _classify(sent):
-    """返回句首模式名。
-
-    序数分条（第一/一是/首先…）不计入「连接词起句」——该刊 175 处机械序数
-    （anti-patterns.md §B 级）是合法分条手段，问题只在「每段都同一套」，
-    那由 paragraph_opening.py 与 language_audit 的 G 类负责；本模块只看
-    衔接性连接词（同时/此外/因此/然而…）。
-    """
-    h = dp.clean(sent)
-    if CONN_RE.match(h):
-        return "连接词起句"
-    if TIME_RE.match(h):
-        return "时间背景起句"
-    if SELF_RE.match(h):
-        return "「本研究」起句"
-    return "直接陈述"
-
-
 # ---- 四类句首模式（衔接性连接词；序数分条单列，不计入过度衔接）----
 CONN_RE = re.compile(
     r"^(同时|此外|另外|还有|进一步|进而|从而|因此|因而|由此|然而|但是|但|不过|"
@@ -74,8 +56,13 @@ CONN_RE = re.compile(
 TIME_RE = re.compile(
     r"^(随着|近年来|当前|目前|伴随|在.{2,20}(背景|趋势|过程)中|(19|20)\d{2}年)")
 SELF_RE = re.compile(r"^(本文|本研究|笔者)")
+ORDINAL_RE = re.compile(
+    r"^(一是|二是|三是|四是|其一|其二|其三|首先|其次|再次|最后|第一|第二|第三|第四|"
+    r"一方面|另一方)")
 
 MODES = ["直接陈述", "连接词起句", "时间背景起句", "「本研究」起句"]
+
+# 该刊实测（paragraphs.json 118 篇 / 4743 段，口径见 docstring）
 CORPUS_DIRECT = 94.3        # %
 CORPUS_CONN = 2.5           # %
 CORPUS_TIME = 0.9           # %
@@ -119,6 +106,7 @@ def analyze(doc, corpus_dir=None):
     paras, refs, abs_text, kw_text, titles, body = dp.extract_paras(doc)
     # 摘要不参与句式统计（摘要是压缩文体，句式与正文不同）；只统计正文段
     cnt = {m: 0 for m in MODES}
+    ordinal = 0        # 序数分条起句（单列，不计入「连接词起句」）
     samples = {m: [] for m in MODES}
     n = 0
     for b in body:
@@ -129,6 +117,8 @@ def analyze(doc, corpus_dir=None):
             h = dp.clean(s)
             if len(h) < MIN_SENT:
                 continue
+            if ORDINAL_RE.match(h):
+                ordinal += 1
             m = _classify(s)
             cnt[m] += 1
             n += 1
@@ -159,9 +149,14 @@ def analyze(doc, corpus_dir=None):
         notices.append(
             f"「本研究/本文」起句 {pct['「本研究」起句']:.1f}%（>{SELF_LIMIT:.0f}%）——"
             f"自称起句偏多（该刊 {CORPUS_SELF}%），可改无主句或对象起句")
+    if ordinal:
+        notices.append(
+            f"序数分条起句 {ordinal} 句（{ordinal / n * 100:.1f}%）——"
+            f"该刊 175 处机械序数属合法分条手段，但同段别混用"
+            f"「首先/第一/一是」多套体系")
 
     return {"n_sents": n, "counts": cnt, "pct": pct, "samples": samples,
-            "issues": issues, "notices": notices}
+            "ordinal": ordinal, "issues": issues, "notices": notices}
 
 
 def corpus_baseline(corpus_dir=None):
@@ -240,12 +235,13 @@ def main():
     if res["n_sents"] == 0:
         print("⚠️ " + res["issues"][0])
         sys.exit(0)
-
     print("\n【句首模式分布】")
     for m in MODES:
         print(f"  {m:<14} {res['counts'][m]:4d} 句 = {res['pct'][m]:5.1f}%")
         for s in res["samples"][m][:2]:
             print(f"       例：{s}…")
+    print(f"  {'序数分条起句':<14} {res['ordinal']:4d} 句 = "
+          f"{res['ordinal'] / max(res['n_sents'], 1) * 100:5.1f}%（不计入连接词起句）")
 
     print("\n" + "-" * 68)
     if res["issues"]:

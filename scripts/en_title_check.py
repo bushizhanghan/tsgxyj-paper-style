@@ -51,11 +51,16 @@ FUNC_BIGRAMS = {"based on", "according to", "due to", "in terms of",
 # 单个字母缩略词（如 A、AI）保留原样
 ACRONYM_RE = re.compile(r"^[A-Z0-9]{1,4}$")
 
-# 中文题名分块信号（按语义块粗分，仅用于词数比）
+# 中文题名分块信号（按连接词/标点切，仅用于展示）
 CN_SPLIT_RE = re.compile(r"——|—|－|[-:：]|、|与|和|及|基于|面向|下的|中的|"
-                         r"对|从|在|为|以|的|了|着|及其")
-# 词数比合理区间（中文块数 vs 英文词数）
+                         r"对|从|在|为|以|及其")
+# 中文题名词数估算：汉语题名平均约 2 字/词（「面向/多元/障碍/群体/的/图书馆/…」）
+CN_CHARS_PER_WORD = 2.0
+# 英文题名词数 / 中文题名估算词数 的合理区间（官方未规定，按中英题名
+# 信息量相当的经验区间设定；明显越界才报，区间内不判）
 RATIO_MIN, RATIO_MAX = 0.5, 2.5
+# 中文题名最短字数（低于此不判对应性）
+CN_LEN_MIN = 6
 # 中文题名最短块数（低于此不判对应性）
 CN_BLOCK_MIN = 2
 
@@ -77,11 +82,10 @@ def content_words(title):
     return words
 
 
-def cn_blocks(title):
-    """中文题名的语义块粗分（去掉「的」等结构词后再切）。"""
-    t = re.sub(r"[的了着及其与和及]", "", title or "")
-    parts = [p for p in CN_SPLIT_RE.split(t) if p and p.strip()]
-    return parts
+def cn_word_estimate(title):
+    """中文题名词数估算：汉字数 ÷ CN_CHARS_PER_WORD（约 2 字/词）。"""
+    n = len(re.findall(r"[\u4e00-\u9fff]", title or ""))
+    return max(n / CN_CHARS_PER_WORD, 1.0)
 
 
 def find_titles(paras):
@@ -120,23 +124,25 @@ def analyze(doc):
 
     # ---------- ② 中英题名对应性（词数比） ----------
     if cn_title:
-        blocks = cn_blocks(cn_title)
-        n_cn = max(len(blocks), 1)
+        n_cn = cn_word_estimate(cn_title)
         n_en = len(re.findall(r"[A-Za-z][A-Za-z\-']*", en_title))
-        stat.update({"cn_blocks": n_cn, "en_words": n_en})
-        if n_en and n_cn >= CN_BLOCK_MIN:
+        stat.update({"cn_words": round(n_cn, 1), "en_words": n_en,
+                     "cn_chars": len(re.findall(r"[\u4e00-\u9fff]", cn_title))})
+        if n_en and n_cn >= CN_LEN_MIN / CN_CHARS_PER_WORD:
             ratio = n_en / n_cn
             stat["word_ratio"] = round(ratio, 2)
             if ratio < RATIO_MIN:
-                issues.append(f"英文题名词数 {n_en} 明显少于中文题名块数 "
-                              f"{n_cn}（比值 {ratio:.2f} < {RATIO_MIN}）——"
-                              f"英文题名疑过短，与中文题名不对应")
+                issues.append(f"英文题名 {n_en} 词相对中文题名（约 "
+                              f"{n_cn:.0f} 词）偏少（比值 {ratio:.2f} < "
+                              f"{RATIO_MIN}）——英文题名疑过短，"
+                              f"与中文题名不对应")
             elif ratio > RATIO_MAX:
-                notices.append(f"英文题名词数 {n_en} 明显多于中文题名块数 "
-                               f"{n_cn}（比值 {ratio:.2f} > {RATIO_MAX}）——"
-                               f"核对是否译出了中文题名没有的限定语")
-        elif n_cn < CN_BLOCK_MIN:
-            notices.append(f"中文题名仅 {n_cn} 个语义块，过短不判对应性")
+                issues.append(f"英文题名 {n_en} 词明显多于中文题名（约 "
+                              f"{n_cn:.0f} 词）（比值 {ratio:.2f} > "
+                              f"{RATIO_MAX}）——英文题名疑过长，核对是否译出"
+                              f"中文题名没有的限定语或整句描述")
+        else:
+            notices.append("中文题名过短，不判中英对应性")
 
     # ---------- ③ 副标题衔接 ----------
     cn_sub = bool(re.search(r"——|—|－", cn_title or ""))
@@ -177,9 +183,9 @@ def main():
 
     print(f"\n中文题名：{st.get('cn_title') or '（未检出）'}")
     print(f"英文题名：{st.get('en_title') or '（未检出）'}")
-    if st.get("cn_blocks"):
-        print(f"中文题名语义块 {st['cn_blocks']} 个 ｜ 英文题名词数 "
-              f"{st['en_words']} 个"
+    if st.get("cn_words"):
+        print(f"中文题名 {st.get('cn_chars', 0)} 字（约 {st['cn_words']:.0f} 词）"
+              f" ｜ 英文题名 {st['en_words']} 词"
               + (f"（比值 {st['word_ratio']:.2f}，区间 "
                  f"{RATIO_MIN}–{RATIO_MAX}）" if st.get("word_ratio") else ""))
     print(f"副标题：中文 {'有' if st.get('cn_subtitle') else '无'} ｜ "

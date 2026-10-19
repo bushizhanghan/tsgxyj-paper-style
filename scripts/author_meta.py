@@ -100,14 +100,20 @@ def cn_names_in(text):
 
 
 def research_dirs(block):
-    """研究方向列表（≥2 个为官方示例形态）。"""
+    """研究方向列表（≥2 个为官方示例形态）。
+
+    研究方向可能写在「研究方向：」标签后同句，也可能另起一段续写；
+    这里在整块内取标签后的全部内容，再切到句末/下一标签。
+    """
     m = RESEARCH_DIR_RE.search(block or "")
     if not m:
         return []
-    seg = m.group(1).strip().rstrip("。.")
+    seg = m.group(1)
+    # 截到句末（或「通讯作者」标签前），避免吞掉后续段落
+    seg = re.split(r"[。！？!?]", seg)[0]
     seg = re.split(r"(?:通讯作者|通信作者)", seg)[0]
+    seg = seg.strip().rstrip("。.").strip()
     parts = [p.strip() for p in DIR_SPLIT_RE.split(seg) if p.strip()]
-    # 「等」结尾只算前面的实项
     parts = [re.sub(r"等$", "", p) for p in parts]
     return [p for p in parts if p]
 
@@ -195,9 +201,17 @@ def analyze(doc):
                             "无法进行（存在性见 submission_pack.py）"],
                 "stat": stat}
 
+    # 简介块只取到第一个「。」为止的句子（官方示例为一句话），
+    # 避免把后续通信地址段并入简介块，造成单位/职称误配
+    first_sent = re.split(r"(?<=。)", bblock)[0]
+    stat["bio_sentence"] = first_sent[:90]
+
+    # 简介块首句（官方示例形态：姓名＋单位＋职称…＋研究方向…，一句话）
+    bio = first_sent
+
     # ---------- ① 姓名一致性 ----------
     sig = spk.signature_name(paras)      # 文首署名（与 submission_pack 同口径）
-    names_in_block = cn_names_in(bblock)
+    names_in_block = cn_names_in(bio)
     stat.update({"signature": sig, "names_in_block": names_in_block[:6]})
     if sig:
         sig_n = norm_name(sig)
@@ -208,15 +222,19 @@ def analyze(doc):
                           f"不一致——按官方 §8「作者简介（包括姓名…）」核对")
 
     # ---------- ② 职称/学位/导师 串联形态 ----------
-    t_iss, t_not, info = title_degree_shape(bblock)
+    t_iss, t_not, info = title_degree_shape(bio)
     issues += t_iss
     notices += t_not
     stat.update({"titles": info["titles"], "degrees": info["degrees"],
                  "mentors": info["mentors"]})
 
     # ---------- ③ 研究方向 ----------
-    dirs = research_dirs(bblock)
+    dirs = research_dirs(bio)
     stat["dirs"] = dirs
+    if not dirs:
+        # 研究方向可能跨句/跨段（示例中同句，实操里常见另起一行）
+        dirs = research_dirs(bblock)
+        stat["dirs"] = dirs
     if not dirs:
         issues.append("作者简介未检出「研究方向：」——官方 §8 要求写明研究方向")
     elif len(dirs) < 2:
@@ -227,15 +245,13 @@ def analyze(doc):
                        f"示例形态一致 ✓")
 
     # ---------- ④ 单位 ----------
-    u_iss, u_not, unit = unit_shape(bblock)
+    u_iss, u_not, unit = unit_shape(bio)
     issues += u_iss
     notices += u_not
     stat["unit"] = unit
 
     # ---------- ⑤ 通讯作者标注形态 ----------
     if re.search(r"通讯作者|通信作者", bblock):
-        # 官方：标注在该作者信息之后
-        tail_after = bblock[bblock.find("研究方向") if "研究方向" in bblock else 0:]
         notices.append("简介块内含「通讯作者」标注 ✓（官方要求标注在该作者"
                        "信息之后）")
 
@@ -260,8 +276,8 @@ def main():
     print("=" * 72)
 
     print(f"\n文首署名：{st.get('signature') or '（未检出）'}")
-    if st.get("bio_block"):
-        print(f"简介块首句：{st['bio_block'][:60]}")
+    if st.get("bio_sentence"):
+        print(f"简介块首句：{st['bio_sentence'][:70]}")
     if st.get("unit"):
         print(f"单位（简介块内）：{st['unit']}")
     if st.get("titles") or st.get("degrees") or st.get("mentors"):

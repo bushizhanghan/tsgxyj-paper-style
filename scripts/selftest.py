@@ -352,9 +352,9 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 四十二项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 四十九项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联四十二个工具", len(_tools_in) == 42, (_tools_in, len(_tools_in)))
+check("check_all 串联四十九个工具", len(_tools_in) == 49, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
@@ -366,6 +366,9 @@ for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.
               "chapter_balance.py", "intro_scale.py", "heading_naming.py",
               "le_density.py", "ji_density.py", "hedge_ratio.py",
               "abstract_keyword_link.py", "front_matter.py", "en_title_check.py",
+              "ref_format_style.py", "ref_online_format.py", "ref_book_format.py",
+              "sentence_pattern.py", "author_meta.py", "closing_format.py",
+              "submission_email.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -401,6 +404,10 @@ check("check_all ㊴ 接入小结",
       "摘要—关键词脱节" in _ca, "㊴ 小结未接入")
 check("check_all ㊵㊶ 接入小结",
       "前置元数据序列" in _ca and "英文题名" in _ca, "㊵㊶ 小结未接入")
+check("check_all ㊷–㊼ 接入小结",
+      "文献标点形态" in _ca and "电子文献格式" in _ca and "专著报纸格式" in _ca
+      and "句首模式" in _ca and "作者信息形态" in _ca and "文末序列" in _ca,
+      "㊷–㊼ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -2307,6 +2314,96 @@ if HAVE_DOCX:
         _eto = _ret.stdout or ""
         check("etc 端到端正常运行", "英文题名核验" in _eto, _eto[:200])
         check("etc 检出英文题名", "Intelligent Assistance" in _eto, _eto[:300])
+
+        # ---- 9q. 代理产物七脚本（ref_style/online/book/email/pattern/author/closing） ----
+        print("[9q] 代理产物七脚本")
+        # ㊷ 文献标点形态
+        import ref_format_style as rfs
+        check("rfs 可导入且有核验函数",
+              hasattr(rfs, "analyze") or hasattr(rfs, "check_items") or hasattr(rfs, "main"),
+              [a for a in dir(rfs) if not a.startswith("_")][:8])
+        _rfs_doc = os.path.join(td, "rfs.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020, 40(3): 12-18.")   # 半角点
+        _d.add_paragraph("[2] 乙. 某文献[J]. 某刊, 2020.")
+        _d.save(_rfs_doc)
+        _rfs2 = subprocess.run([sys.executable, os.path.join(HERE, "ref_format_style.py"),
+                                _rfs_doc], capture_output=True, encoding="utf-8",
+                               errors="replace")
+        check("rfs 端到端正常运行", "参考文献标点形态核验" in _rfs2.stdout, _rfs2.stdout[:200])
+        check("rfs 检出半角标点", "半角" in _rfs2.stdout, _rfs2.stdout[:400])
+        # ㊸ 电子文献格式
+        _ron_doc = os.path.join(td, "ron.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展研究。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某标准[EB/OL]. (2023-6-5)[2026-9-1]. http://x.com.")  # 月日未补0
+        _d.add_paragraph("[2] 乙. 某文献[J]. 某刊, 2020.")
+        _d.save(_ron_doc)
+        _ron2 = subprocess.run([sys.executable, os.path.join(HERE, "ref_online_format.py"),
+                                _ron_doc], capture_output=True, encoding="utf-8",
+                               errors="replace")
+        check("ron 端到端正常运行", "电子文献格式核验" in _ron2.stdout, _ron2.stdout[:200])
+        check("ron 检出日期未补0", "补 0" in _ron2.stdout or "补0" in _ron2.stdout,
+              _ron2.stdout[:400])
+        # ㊺ 句首模式
+        _sp_doc = os.path.join(td, "sp.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象开展相关研究工作并得出结论。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("此外，既有研究存在不足。同时，相关实践尚未展开。因此，"
+                         "亟需开展系统研究。然而，现有证据仍然不足。另外，"
+                         "相关探讨也多停留在表面，未触及核心机制与关键路径，"
+                         "亟需从理论与实践层面推进研究工作。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("本研究完成了相关研究工作，取得预期成果与结论。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_sp_doc)
+        _sp2 = subprocess.run([sys.executable, os.path.join(HERE, "sentence_pattern.py"),
+                               _sp_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _spo = _sp2.stdout or ""
+        check("sp 端到端正常运行", "句首模式单调性核验" in _spo, _spo[:200])
+        check("sp 检出过度衔接", "🔴" in _spo and _sp2.returncode == 1, _spo[:400])
+        check("sp 输出该刊基线", "94.3%" in _spo, _spo[:300])
+        # ㊼ 文末序列
+        _cf_doc = os.path.join(td, "cf.docx")
+        _d = Document()
+        _d.add_paragraph("某论文题名")
+        _d.add_paragraph("张　瀚")
+        _d.add_paragraph("【摘　要】本研究以某群体为对象开展研究。")
+        _d.add_paragraph("【关键词】A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_cf_doc)
+        _cf2 = subprocess.run([sys.executable, os.path.join(HERE, "closing_format.py"),
+                               _cf_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _cfo = _cf2.stdout or ""
+        check("cf 端到端正常运行", "文末序列核验" in _cfo, _cfo[:200])
+        check("cf 检出文末缺项", "作者简介" in _cfo, _cfo[:400])
+        # ㊽ 投稿邮件生成
+        _se2 = subprocess.run([sys.executable, os.path.join(HERE, "submission_email.py"),
+                               _cf_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _seo = _se2.stdout or ""
+        check("se 端到端正常运行", "tsgxyj@vip.163.com" in _seo or "投稿" in _seo,
+              _seo[:200])
+        check("se 含官方邮箱", "tsgxyj@vip.163.com" in _seo, _seo[:300])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:

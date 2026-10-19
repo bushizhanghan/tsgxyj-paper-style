@@ -9,23 +9,26 @@
 
 已有工具链只查英文摘要/关键词「是否存在」（diagnose_paper 的官方合规
 维度），不查**先后次序**。次序错误（如英文题名排在中文摘要之后、英文
-摘要在中文摘要之前、作者姓名跑到题名后面很远）在初审里是显性的
+摘要在中文摘要之前、英文题名抢在中文题名之前）在初审里是显性的
 体例问题，本脚本专门按段落顺序核验：
 
-  · 七类前置元素（中文题名/作者名/英文题名/英文作者名/中文摘要/
-    中文关键词/英文摘要/英文关键词）各自首次出现的段落号；
+  · 前置元素（中文题名/作者名/英文题名/英文作者名/中文摘要/中文关键词/
+    英文摘要/英文关键词）各自首次出现的段落号；
   · 依官方序列比对实际次序，报出逆序对（如「英文题名在中文摘要后」）；
   · 英文题名缺失（官方序列明文要求，投稿稿常漏）；
+  · 英文题名抢在中文题名之前；
   · 英文作者姓名缺失；
   · 作者姓名行是否紧随中文题名之后（相隔过远＝疑似署名位置不当）；
-  · 中文题名本身是否缺失或被「摘要」抢先。
+  · 中文题名本身是否缺失。
 
 用法:
     python front_matter.py <论文.docx> [--json]
-退出码：0 = 前置序列无次序问题；1 = 检出次序错误或缺英文题名/中文题名。
+退出码：0 = 前置序列无次序问题；1 = 检出次序错误或缺中文题名/英文题名。
 
 说明：只核**顺序与存在性**，不核元素内部格式（摘要字数见 meta_scale、
 英文题名大小写见 en_title_check.py、作者简介形态见 author_meta.py）。
+前置元素只在「正文起点」之前的窗口内认定，避免把文末拉丁文献条目
+误认成英文题名。
 """
 import os
 import re
@@ -80,34 +83,60 @@ def _name_line(s):
     return True
 
 
-def find_front_matter(paras):
-    """按段落顺序定位前置元素。
+def body_start_index(paras):
+    """正文起点段号（前置元素只在此之前的窗口内认定）。
 
-    返回 (found, detail)：found 为 {键: 段落号}，detail 为 {键: 原文摘要}。
+    命中任一即止：参考文献标题 / Heading 样式 / 「N 标题」式编号段 /
+    「引言」独占段。
     """
-    found, detail = {}, {}
-    seen_cn_title = False
-    seen_abs = False
     for idx, (style, raw) in enumerate(paras):
         t = (raw or "").strip()
         if not t:
             continue
+        if re.match(r"^\s*参\s*考\s*文\s*献", t):
+            return idx
+        if style and style.lower().startswith("heading"):
+            return idx
+        if re.match(r"^\s*引\s*言\s*$", t):
+            return idx
+        if re.match(r"^\s*\d+(?:\.\d+){0,3}\s+\S", t) and len(t) < 40:
+            return idx
+    return len(paras)
+
+
+def find_front_matter(paras):
+    """按段落顺序定位前置元素，返回 (found, detail)。
+
+    found: {键: 段落号}；detail: {键: 原文摘要}。
+    """
+    found, detail = {}, {}
+    limit = body_start_index(paras)
+    for idx in range(min(limit, len(paras))):
+        t = (paras[idx][1] or "").strip()
+        if not t:
+            continue
         head = t[:14]
-        # 中文题名：摘要之前的第一个非空中文长段（≥8 字）
-        if "cn_title" not in found and not seen_abs and _is_cjk_line(t):
-            c = dp.clean(t)
-            if len(c) >= 8 and not re.search(r"^【?\s*摘\s*要", head) \
-                    and not re.search(r"^【?\s*关\s*键\s*词", head):
-                found["cn_title"] = idx
-                detail["cn_title"] = t[:60]
-                seen_cn_title = True
-                continue
+        # 中文题名：前置窗口内第一个中文长段（≥4 字，排除摘要/关键词标签）
+        if "cn_title" not in found and _is_cjk_line(t) \
+                and len(dp.clean(t)) >= 4 \
+                and not re.search(r"^【?\s*摘\s*要", head) \
+                and not re.search(r"^【?\s*关\s*键\s*词", head):
+            found["cn_title"] = idx
+            detail["cn_title"] = t[:60]
+            continue
+        # 中文题名之前的拉丁长段 → 疑似英文题名抢位（官方序列中文题名应在最前）
+        if "cn_title" not in found and "_pre_latin" not in found \
+                and _looks_en(t) and len(t) >= 15 \
+                and not re.match(r"^(?:Abstract|ABSTRACT|Key\s*words?)\b", t,
+                                 re.I):
+            found["_pre_latin"] = idx
+            detail["_pre_latin"] = t[:60]
+            continue
         # 中文摘要 / 关键词
         if re.search(r"^【?\s*摘\s*要】?[：:]?", head):
             if "cn_abs" not in found:
                 found["cn_abs"] = idx
                 detail["cn_abs"] = t[:60]
-                seen_abs = True
             continue
         if re.search(r"^【?\s*关\s*键\s*词】?[：:]?", head):
             if "cn_kw" not in found:
@@ -125,20 +154,22 @@ def find_front_matter(paras):
                 found["en_kw"] = idx
                 detail["en_kw"] = t[:60]
             continue
-        # 作者姓名（中文）：题名后、摘要前的姓名行
-        if seen_cn_title and "cn_abs" not in found and _name_line(t):
+        # 作者姓名（中文）：中文题名之后、中文摘要之前的姓名行（末一个为准）
+        if "cn_title" in found and "cn_abs" not in found and _name_line(t):
             found["cn_author"] = idx
             detail["cn_author"] = t[:30]
             continue
-        # 英文题名：摘要前的拉丁长行
-        if seen_cn_title and "cn_abs" not in found and "en_abs" not in found \
-                and _looks_en(t) and len(t) >= 15:
-            if "en_title" not in found:
+        # 英文题名：中文题名之后、英文摘要之前的拉丁长行
+        if "cn_title" in found and "en_abs" not in found and _looks_en(t):
+            if "en_title" not in found and len(t) >= 15:
                 found["en_title"] = idx
-                detail["en_title"] = t[:70]
+                # 不截断——截断会把末词切成半截（「Libraries」→「Librarie」），
+                # 下游 en_title_check 的 Title Case 判定会因此误报「i 未大写」
+                detail["en_title"] = t
                 continue
-            # 英文题名之后若还有短拉丁行 → 英文作者姓名
-            if "en_author" not in found and len(dp.clean(t)) <= 40:
+            # 英文题名之后的短拉丁行 → 英文作者姓名
+            if "en_title" in found and "en_author" not in found \
+                    and len(t) <= 40:
                 found["en_author"] = idx
                 detail["en_author"] = t[:40]
     return found, detail
@@ -147,13 +178,19 @@ def find_front_matter(paras):
 def order_issues(found):
     """按官方序列比对实际次序，返回 (issues, notices)。"""
     issues, notices = [], []
-    # 逐对比对相邻键的实际段落号是否递增
+    # 相邻键的实际段落号必须递增
     for a, b in zip(SEQ, SEQ[1:]):
         if a in found and b in found and found[b] < found[a]:
             issues.append(
                 f"次序错误：{SEQ_LABEL[b]}（段{found[b]}）排在"
                 f"{SEQ_LABEL[a]}（段{found[a]}）之前——官方序列要求"
                 f"「{SEQ_LABEL[a]}」在前")
+    # 英文题名抢在中文题名之前
+    if "_pre_latin" in found and "cn_title" in found:
+        issues.append(
+            f"次序错误：疑似英文题名（段{found['_pre_latin']}）排在中文题名"
+            f"（段{found['cn_title']}）之前——官方序列要求文章标题（中文）"
+            f"在最前")
     # 英文题名缺失（官方序列明文要求）
     if "en_title" not in found and "cn_title" in found:
         issues.append("缺少英文题名——官方格式序列要求中文题名后紧跟英文题名")

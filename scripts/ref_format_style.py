@@ -103,6 +103,25 @@ def half_dots(masked):
     return hits
 
 
+def author_dot_pos(raw):
+    """作者段结束点（姓名后的分隔点）在 raw 中的下标。
+
+    复用 ref_format.parse_item 的切分口径：去掉序号后第一个「.」之前是
+    作者段。条目无作者段（如标准号开头「信息技术 …: GB/T …[S].」）时返回
+    None——那种条目的第一个点是类型标识后的分隔点，不归 R4。
+    """
+    m = re.match(r"^[\[［]?\s*\d{1,3}\s*[\]］]?\s*[:：.]?\s*(.+)$", raw, re.S)
+    txt = m.group(1) if m else raw
+    am = re.match(r"^([^.]{2,60}?)\.", txt)
+    if not am:
+        return None
+    # txt 在 raw 中的起点
+    start = raw.find(txt[:20])
+    if start < 0:
+        start = len(raw) - len(txt)
+    return start + am.end(1)
+
+
 def check_item(raw):
     """核单条。返回 findings: [(级别, 规则号, 说明)]，级别 red/notice。"""
     f = []
@@ -114,17 +133,27 @@ def check_item(raw):
 
     masked = mask_noise(raw)
     dots = half_dots(masked)
+    adot = author_dot_pos(raw)
     if dots:
         first = dots[0]
         seg = raw[max(0, first - 6):first + 6]
-        # R4/R1：作者姓名后的分隔点
-        f.append(("red", "R1/R4",
-                  f"作者姓名后用半角「.」：…{seg}… 应为全角「．」"
-                  f"（官方：作者．题名）"))
-        for i in dots[1:]:
-            seg = raw[max(0, i - 8):i + 8]
+        if adot is not None and abs(first - adot) <= 1:
+            # R4/R1：作者姓名后的分隔点
+            f.append(("red", "R1/R4",
+                      f"作者姓名后用半角「.」：…{seg}… 应为全角「．」"
+                      f"（官方：作者．题名）"))
+        else:
             f.append(("red", "R1",
                       f"分隔点用半角「.」：…{seg}… 应为全角「．」"))
+        for i in dots[1:]:
+            seg = raw[max(0, i - 8):i + 8]
+            if adot is not None and abs(i - adot) <= 1:
+                f.append(("red", "R1/R4",
+                          f"作者姓名后用半角「.」：…{seg}… 应为全角「．」"
+                          f"（官方：作者．题名）"))
+            else:
+                f.append(("red", "R1",
+                          f"分隔点用半角「.」：…{seg}… 应为全角「．」"))
     # R1 变体：误用中文句号「。」
     for m in re.finditer(r"\u3002", masked):
         seg = raw[max(0, m.start() - 8):m.start() + 8]

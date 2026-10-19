@@ -115,16 +115,31 @@ def core_finding(abs_text):
 
 
 def method_phrase(body, abs_text):
-    """方法短语：从摘要中找「采用/基于…」片段。"""
+    """方法短语：从摘要中找「采用/基于…」片段，剔除引文转述污染。
+
+    「郭亚军等[7]基于2021年10月对128家…的调查指出」是他人研究的转述，
+    不是本文方法——凡带「等[n]」或「[n]」标注的句子一律跳过。
+    """
     src = abs_text or ""
-    m = re.search(r"(?:采用|运用|使用|依托|基于)([^，。；]{2,26})", src)
-    if m:
-        return m.group(1).strip()
-    for p in body:
-        m = re.search(r"(?:采用|运用|使用|基于)([^，。；]{2,26})", p)
+    for seg in re.split(r"[。；！？]", src):
+        if re.search(r"等\s*\[\d+\]|\[\d+(?:[-,，]\s*\d+)*\]", seg):
+            continue
+        m = re.search(r"(?:采用|运用|使用|依托|基于|依据)([^，。；]{2,26})",
+                      seg)
         if m:
             return m.group(1).strip()
-    return "混合研究方法"
+    # 摘要无可用方法句 → 从正文研究设计段找（同样避开引文转述句）
+    for p in body:
+        if not re.search(r"研究对象|研究方法|研究设计|方法", p):
+            continue
+        for seg in re.split(r"[。；！？]", p):
+            if re.search(r"等\s*\[\d+\]|\[\d+(?:[-,，]\s*\d+)*\]", seg):
+                continue
+            m = re.search(r"(?:采用|运用|使用|依托|基于|依据)([^，。；]{2,26})",
+                          seg)
+            if m:
+                return m.group(1).strip()
+    return "文献分析与实证测试相结合的方法"
 
 
 def column_line(cols):
