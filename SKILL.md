@@ -46,7 +46,7 @@ metadata:
 - 量化规则取自 `references/`，每条带出处；标注「分析判断」的条目是归纳判断，非编辑口径，向用户说明。
 - **官方优先**：形式合规以 `references/official-guidelines.md`（该刊官网原文）为准；实测统计（摘要 262 字、段长 206 等）只用于风格拟合。两者冲突时官方优先。
 - **事实优先**：改写只动形式；引用不虚构、数字不擅改（模式 D 的纪律适用于所有模式）。
-- **修复即断言**：改动 `scripts/` 后必须跑 `python scripts/selftest.py`（521 项断言，退出码 0 = 全过），防止回归。
+- **修复即断言**：改动 `scripts/` 后必须跑 `python scripts/selftest.py`（538 项断言，退出码 0 = 全过），防止回归。
 - **数字一致性**：摘要与正文的样本量、百分比、题次必须逐一核对（`number_consistency.py` 已接入 `check_all.py` 第⑩项，红线级）；改写前后同样要做数字比对——「数字不擅改」是所有模式的共同纪律。
 - **术语一致**：同一概念全文用一种写法，不混用同义异形词（`term_consistency.py` 按该刊 118 篇原文篇数给出偏好词，已接入 `check_all.py` 第⑪项，待办级）；确需区分两个相近概念时，在首次出现处显式界定，避免读者误读为笔误。
 - **回复完整性**：返修提交前每条意见都要有「复述 → 回应 → 修改位置」三件套，且位置精确到节/段（`response_check.py` 按编号集合核漏回，退出码 1 = 有硬伤）；只写「已修改」不写改在哪儿，审稿人无法核对。
@@ -94,7 +94,7 @@ metadata:
 - `number_consistency.py <论文.docx>` — **摘要—正文数字一致性核验器（红线级）**：抽取摘要/正文/结语中的样本量、百分比、题次等数值断言（阿拉伯数字＋中文数字＋百分之X＋X成），按「单位＋前接名词」精确配对、关键词唯一兜底，报出摘要与正文同名指标数值不等的硬伤；另核稿内逻辑（回收/有效样本大于发放、百分比越界、有效率与「有效÷发放」算不符）与条目数声称（摘要「四类对策」↔正文实际列举数）；模糊量与多候选只报待核对；退出码 1 = 存在数字硬伤
 - `term_consistency.py <论文.docx>` — **术语漂移检测器**：按 26 组同义异形词（信息无障碍/信息可及性、适老化/老龄友好、fsQCA/组态分析…）扫描摘要/正文/结语/关键词，稿内混用 ≥2 个成员即报「非偏好词→偏好词」统一建议，附**该刊 118 篇原文的真实篇数**（偏好词＝篇数最高者）；白名单按见刊论文共现率设定（该刊自己也在用的写法不误报，如大语言模型/大模型、老年人/老年群体）；单用非偏好词只作提示级；已接入 `check_all.py` 第⑪项（待办级，不计红线）；退出码 1 = 检出混用
 - `response_check.py --reviews <审稿意见> --response <回复信>` — **审稿回复逐条回应核对器（模式 F）**：输入审稿意见文件 + 回复信文件（.docx 段落/表格、.md/.txt 含 markdown 表格），核验①意见条数 vs 回应区块数（按编号集合比对，直接报漏回了哪条）②每条是否含「意见（复述）/回应/修改位置」三件套 ③位置标注是否精确到节/段/页/表/图；分档🔴硬伤（漏回/缺件/无位置）｜🟡待核对（位置笼统、未识别到结构、疑似答非所问）｜✅完整；退出码 1 = 有硬伤
-- `check_all.py <论文.docx>` — **投稿前一键总检**：串联 ref_format → verify_refs → citation_analysis → diagnose → language_audit → mock_review → benchmark → argument_check → table_fig_audit → number_consistency → term_consistency → citation_quality → self_repeat → english_audit → heading_audit → citation_distribution → figure_data_check → submission_pack → corpus_similarity → conclusion_echo → figure_numbering → keyword_echo → paragraph_structure → sentence_length → paragraph_shape → heading_shape → abstract_shape → benwen_usage → structure_scale → meta_scale → ref_year_check → ref_type_check → ref_dup_check → chapter_balance → intro_scale → heading_naming → number_consistency → term_consistency，自动汇总红线/待办与模拟审稿分数，并输出与上次总检的指标对比（快照自动记录）；`--quick` 只跑前两项、`--no-review` 跳过模拟审稿；退出码 0 = 无红线
+- `check_all.py <论文.docx>` — **投稿前一键总检**：串联 ref_format → verify_refs → citation_analysis → diagnose → language_audit → mock_review → benchmark → argument_check → table_fig_audit → number_consistency → term_consistency → citation_quality → self_repeat → english_audit → heading_audit → citation_distribution → figure_data_check → submission_pack → corpus_similarity → conclusion_echo → figure_numbering → keyword_echo → paragraph_structure → sentence_length → paragraph_shape → heading_shape → abstract_shape → benwen_usage → structure_scale → meta_scale → ref_year_check → ref_type_check → ref_dup_check → chapter_balance → intro_scale → heading_naming → le_density → ji_density → hedge_ratio → number_consistency → term_consistency，自动汇总红线/待办与模拟审稿分数，并输出与上次总检的指标对比（快照自动记录）；`--quick` 只跑前两项、`--no-review` 跳过模拟审稿；退出码 0 = 无红线
 - `argument_check.py <论文.docx>` — **论证链对仗核对**：提取「发现句」（一是/其二/占比/结果表明…）与「对策句」（（1）（2）/其一/应…，收口章优先），按主题词重叠逐条匹配并分档（强回应／弱回应／疑似缺回应），定位未对仗的发现；退出码 1 = 存在疑似缺回应
 - `citation_quality.py <论文.docx>` — **引文—论点关联核验**（模式 D 深挖）：对每个引用点 [n] 取所在句+前一句为论点上下文，与文献题名主题词做重叠评分（🔴零关联/🟡弱关联/✅有关联），识别「某某[n]指出」规范挂靠；退出码 1 = 存在零关联引用点
 - `progress_dashboard.py <论文.docx>` — **投稿就绪度看板**：七项指标（红线0/审稿分≥85/文献≥刊P25/无占位符/数字无硬伤/术语无混用/投稿包齐备）逐项 ✓✗ + 量化差距 + Top3 修复建议（按对分数的边际影响排序）；退出码 0 = 七项全就绪
@@ -123,10 +123,13 @@ metadata:
 - `chapter_balance.py <论文.docx>` — **单章字数失衡核验**：单章占正文 >40% 判严重失衡（该刊单章 P90≈30%）、<2% 判挂名章、章间字数比 >25:1 判不均；输出逐章占比表；退出码 1 = 有单章 >40%
 - `intro_scale.py <论文.docx>` — **引言篇幅形态核验**：引言占比对照该刊单列章中位 7.1%/P90≈14%（>15% 过度铺陈、<3% 铺垫不足）、段数形态（2–4 段）、**缺口句必备件**（缺则红线——问题意识未立）；退出码 1 = 缺缺口句
 - `heading_naming.py <论文.docx>` — **标题命名对位核验**（提示级）：词根表**从语料 heads 实测构建**（776 个高频词根，出现于 ≥5 个标题；不做去碎片——那会误删「研究方法」等有效词根），报未含高频词根的标题；纯英文层级标题提示；退出码恒 0
+- `le_density.py <论文.docx>` — **「了」密度核验**：全文密度（该刊 26.6/万字）与单段堆积（该刊 92% 段 ≤2 个）；单段 ≥4 判堆积、=3 提示核对属性陈述；退出码 1 = 有单段 ≥4
+- `ji_density.py <论文.docx>` — **「即」解释句式密度**：该刊 3.78/万字（121 万字 458 处）；低于 1.5 提示解释手段偏离（多用破折号/括号）、高于 8 提示堆砌；附破折号/括号解释数量对照；退出码恒 0
+- `hedge_ratio.py <论文.docx>` — **程度词比率**：审慎词（可能/相对/逐步/通常/多数…）vs 强断言词（显著/全面/充分/一定/完全/极大/必然/绝对）比率，该刊实测审慎占 52.3%；强断言 >75% 判失衡、>60% 提示；退出码 1 = 失衡
 - `benchmark_paper.py <论文.docx>` — **模式 G 主工具**：百分位对标评估（语料库自动定位 + `--json`）
 - `fetch_reviews_direct.py [--pages 起 止]` — **投稿者反馈抓取与解析**（直连抓取该刊点评页并结构化，用于维护 submission-reality.md）；`--analyze-only` 只分析缓存
 - `feedback_loop.py <论文.docx>` — **审查反哺闭环**：自动判定「已见刊论文 / 用户投稿稿」——已见刊走**全面吸收**（更新 corpus_stats.json 并重算基准）；用户稿走**只取长处**（沉淀正面样本，绝不污染基准）；`--report` 查看累积观察，`--dry-run` 预演；短板/长处累计 ≥5 次时提示可调整阈值
-- `selftest.py` — **工具链自检**：521 项断言（指标计算、结构/摘要体检、GB/T 7714 核验与误报防护、检索逻辑、原文模式挖掘、润色词典、引文分析、模拟审稿与语言体检、合成 docx 端到端、xref 域化/退域往返、13 维打分卡文档守卫、论证链信号规则与语义对仗集成、官方排版序列与投稿包检测、三线表审计、句式脚手架生成器、分栏目精细化基线、摘要—正文数字一致性与条目数核对、术语漂移检测与白名单共现率证据守卫、审稿回复逐条回应完整性与位置精确度），改脚本后必跑，退出码 0 = 全过
+- `selftest.py` — **工具链自检**：538 项断言（指标计算、结构/摘要体检、GB/T 7714 核验与误报防护、检索逻辑、原文模式挖掘、润色词典、引文分析、模拟审稿与语言体检、合成 docx 端到端、xref 域化/退域往返、13 维打分卡文档守卫、论证链信号规则与语义对仗集成、官方排版序列与投稿包检测、三线表审计、句式脚手架生成器、分栏目精细化基线、摘要—正文数字一致性与条目数核对、术语漂移检测与白名单共现率证据守卫、审稿回复逐条回应完整性与位置精确度），改脚本后必跑，退出码 0 = 全过
 
 **Word 交叉引用域脚本**（参考文献 [n] → 可跳转 REF 域）：
 

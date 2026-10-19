@@ -352,9 +352,9 @@ check("selftest subprocess 全带 errors=replace", _calls > 0 and not _bad,
 _ca = io.open(os.path.join(HERE, "check_all.py"), encoding="utf-8").read()
 check("check_all 按脚本名跳过", "SKIP_SCRIPTS" in _ca and 'startswith("\u2464")' not in _ca)
 check("check_all 有 quick 白名单", "QUICK_SCRIPTS" in _ca)
-# 三十六项工具串联完整性（新增项不得从 TOOLS 表脱落）
+# 三十九项工具串联完整性（新增项不得从 TOOLS 表脱落）
 _tools_in = re.findall(r'\("[^"]+",\s*"([\w.]+\.py)",\s*(?:True|False)\)', _ca)
-check("check_all 串联三十六个工具", len(_tools_in) == 36, (_tools_in, len(_tools_in)))
+check("check_all 串联三十九个工具", len(_tools_in) == 39, (_tools_in, len(_tools_in)))
 for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.py",
               "self_repeat.py", "english_audit.py", "heading_audit.py",
               "citation_distribution.py", "figure_data_check.py", "submission_pack.py",
@@ -364,6 +364,7 @@ for _need in ("number_consistency.py", "term_consistency.py", "citation_quality.
               "benwen_usage.py", "structure_scale.py", "meta_scale.py",
               "ref_year_check.py", "ref_type_check.py", "ref_dup_check.py",
               "chapter_balance.py", "intro_scale.py", "heading_naming.py",
+              "le_density.py", "ji_density.py", "hedge_ratio.py",
               "argument_check.py", "table_fig_audit.py"):
     check(f"check_all 含 {_need}", _need in _tools_in, _tools_in)
 check("check_all ⑫ 接入小结", "零关联引用点" in _ca, "未接入 ⑫ 小结")
@@ -392,6 +393,9 @@ check("check_all ㉛㉜㉝ 接入小结",
 check("check_all ㉞㉟㠀 接入小结",
       "单章字数失衡" in _ca and "引言篇幅形态" in _ca and "标题命名对位" in _ca,
       "㉞㉟㠀 小结未接入")
+check("check_all ㊱㊲㊳ 接入小结",
+      "「了」密度" in _ca and "「即」密度" in _ca and "程度词比率" in _ca,
+      "㊱㊲㊳ 小结未接入")
 
 # benchmark 空段落保护
 _bm = io.open(os.path.join(HERE, "benchmark_paper.py"), encoding="utf-8").read()
@@ -2129,6 +2133,89 @@ if HAVE_DOCX:
         check("hnm 端到端正常运行", "标题命名对位核验" in _hno, _hno[:200])
         check("hnm 检出纯英文层级标题", "纯英文" in _hno, _hno[:400])
         check("hnm 提示级退出码 0", _rhn.returncode == 0, str(_rhn.returncode))
+
+        # ---- 9k. 「了」密度（le_density） ----
+        print("[9k] le_density（「了」密度）")
+        import le_density as led
+        check("led 阈值与语料对齐",
+              (led.CORPUS_LE_RATE, led.CORPUS_PARA_GE3, led.SEG_RED) == (26.60, 0.078, 4),
+              (led.CORPUS_LE_RATE, led.CORPUS_PARA_GE3, led.SEG_RED))
+        _led_doc = os.path.join(td, "led.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究构建了系统并完成了验证工作，取得了预期效果。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 结果")
+        _d.add_paragraph("系统提升了服务效率并改善了整体体验，系统优化了核心流程并降低了运营成本，"
+                         "系统完善了交互设计并扩大了覆盖范围。")
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_led_doc)
+        _rld = subprocess.run([sys.executable, os.path.join(HERE, "le_density.py"),
+                               _led_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _ldo = _rld.stdout or ""
+        check("led 端到端正常运行", "「了」密度与属性陈述核验" in _ldo, _ldo[:200])
+        check("led 检出了堆积", "「了」堆积" in _ldo and _rld.returncode == 1, _ldo[:400])
+        check("led 输出该刊基线", "该刊 26.6/万字" in _ldo, _ldo[:300])
+
+        # ---- 9l. 「即」密度（ji_density） ----
+        print("[9l] ji_density（「即」密度）")
+        import ji_density as jid
+        check("jid 阈值与语料对齐",
+              (jid.CORPUS_JI_RATE, jid.CORPUS_JI_TOTAL) == (3.78, 458),
+              (jid.CORPUS_JI_RATE, jid.CORPUS_JI_TOTAL))
+        _jid_doc = os.path.join(td, "jid.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本研究以某群体为对象，即多元障碍群体，开展相关研究工作并得出结论。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_jid_doc)
+        _rjd = subprocess.run([sys.executable, os.path.join(HERE, "ji_density.py"),
+                               _jid_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _jdo = _rjd.stdout or ""
+        check("jid 端到端正常运行", "「即」解释句式密度核验" in _jdo, _jdo[:200])
+        check("jid 输出对照", "破折号解释" in _jdo and "括号解释" in _jdo, _jdo[:300])
+        check("jid 提示级退出码 0/1", _rjd.returncode in (0, 1), str(_rjd.returncode))
+
+        # ---- 9m. 程度词比率（hedge_ratio） ----
+        print("[9m] hedge_ratio（程度词比率）")
+        import hedge_ratio as hgr
+        check("hgr 该刊基线", (hgr.CORPUS_RATIO, hgr.CORPUS_CAUTIOUS_TOTAL,
+                              hgr.CORPUS_STRONG_TOTAL) == (0.523, 1427, 1303),
+              (hgr.CORPUS_RATIO, hgr.CORPUS_CAUTIOUS_TOTAL, hgr.CORPUS_STRONG_TOTAL))
+        check("hgr 词表去重", len(hgr.STRONG) == len(set(hgr.STRONG)))
+        _hgr_doc = os.path.join(td, "hgr.docx")
+        _d = Document()
+        _d.add_paragraph("摘要：本系统显著提升了效率，全面改善了体验，充分优化了流程，"
+                         "一定能够降低成本，完全满足了用户需求，极大提升了价值。")
+        _d.add_paragraph("关键词：A；B；C；D")
+        _d.add_paragraph("0 引言")
+        _d.add_paragraph("引言正文内容，围绕研究背景与研究缺口展开论述，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("1 结果")
+        _d.add_paragraph("本部分呈现系统运行的实测结果，覆盖核心功能与关键流程，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("2 结语")
+        _d.add_paragraph("结语正文内容，对全文研究工作进行收束与总结，字数足够长以通过最短段落过滤条件。")
+        _d.add_paragraph("参考文献")
+        _d.add_paragraph("[1] 甲. 某文献[J]. 某刊, 2020.")
+        _d.save(_hgr_doc)
+        _rhg = subprocess.run([sys.executable, os.path.join(HERE, "hedge_ratio.py"),
+                               _hgr_doc], capture_output=True, encoding="utf-8",
+                              errors="replace")
+        _hgo = _rhg.stdout or ""
+        check("hgr 端到端正常运行", "审慎词与强断言词比率核验" in _hgo, _hgo[:200])
+        check("hgr 检出强断言失衡", "谨慎性" in _hgo and _rhg.returncode == 1, _hgo[:400])
+        check("hgr 输出双方词频", "【审慎词】" in _hgo and "【强断言词】" in _hgo,
+              _hgo[:400])
         # 合成混合意见样例
         _rt_in = os.path.join(td, "reviews.md")
         with open(_rt_in, "w", encoding="utf-8") as _f:

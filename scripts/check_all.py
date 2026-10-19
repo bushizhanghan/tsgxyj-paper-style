@@ -38,6 +38,9 @@
     ㉞ 单章字数失衡（chapter_balance.py，>40% 待办级）
     ㉟ 引言篇幅形态（intro_scale.py，缺缺口句红线级）
     㠀 标题命名对位（heading_naming.py，提示级）
+    ㊱ 「了」密度（le_density.py，单段≥4 待办级）
+    ㊲ 「即」解释句式密度（ji_density.py，提示级）
+    ㊳ 程度词比率（hedge_ratio.py，强断言>75% 待办级）
 最后给一份「总检小结」：红线数 / 待办数 / 模拟审稿分数。
 每次运行把可量化指标写入 <论文>.checkall_snapshot.json，下次运行输出
 「与上次总检对比」（▲/▼ 变化、改善✓/退步⚠）与 JSON 的结构化结果。
@@ -120,6 +123,9 @@ TOOLS = [
     ("㉞ 单章字数失衡", "chapter_balance.py", False),
     ("㉟ 引言篇幅形态", "intro_scale.py", False),
     ("㠀 标题命名对位", "heading_naming.py", False),
+    ("㊱ 「了」密度", "le_density.py", False),
+    ("㊲ 「即」解释句式密度", "ji_density.py", False),
+    ("㊳ 程度词比率", "hedge_ratio.py", False),
 ]
 
 # 跳过规则按脚本名判定，避免依赖显示序号（曾因编号错位跳过错误工具）
@@ -541,6 +547,36 @@ if m and int(m.group(1)):
     print(f"· 标题命名对位：{m.group(1)} 个未含高频词根（提示级，见 㠀）")
 elif m:
     print("· 标题命名对位：✓ 均含高频词根")
+
+# ㊱ 「了」密度：单段 ≥4 → 待办
+ld_out = results.get("㊱ 「了」密度", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项「了」堆积", ld_out)
+if m and int(m.group(1)):
+    todos.append(f"「了」堆积 {m.group(1)} 段（单段≥4，见 ㊱）")
+elif m:
+    print("· 「了」密度：✓ 无堆积段")
+
+# ㊲ 「即」密度：提示级
+jd_out = results.get("㊲ 「即」解释句式密度", {}).get("out", "")
+m = re.search(r"「即」(\d+) 处 = ([\d.]+)/万字", jd_out)
+if m:
+    _r = float(m.group(2))
+    if _r < 1.5 or _r > 8.0:
+        print(f"· 「即」密度：{_r}/万字（提示级偏离，见 ㊲）")
+    else:
+        print("· 「即」密度：✓ 常规区间")
+
+# ㊳ 程度词比率：>75% → 待办；>60% → 提示
+hr_out = results.get("㊳ 程度词比率", {}).get("out", "")
+m = re.search(r"🔴 发现 (\d+) 项问题", hr_out)
+if m and int(m.group(1)):
+    todos.append(f"强断言词占比过高（审慎性不足，见 ㊳）")
+elif m:
+    _m2 = re.search(r"强断言占比 ([\d.]+)%", hr_out)
+    if _m2 and float(_m2.group(1)) > 60:
+        print(f"· 程度词比率：强断言 {_m2.group(1)}%（提示级偏离，见 ㊳）")
+    else:
+        print("· 程度词比率：✓ 均衡")
 
 print()
 if red_flags:
